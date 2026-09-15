@@ -1,8 +1,10 @@
 package com.example.orderservice.controller;
 
+import com.example.orderservice.client.PaymentClient;
 import com.example.orderservice.client.ProductClient;
 import com.example.orderservice.model.Order;
 import com.example.orderservice.model.OrderRequest;
+import com.example.orderservice.model.PaymentResponse;
 import com.example.orderservice.model.ProductResponse;
 import com.example.orderservice.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,12 +24,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OrderControllerTest {
 
     private StubProductClient productClient;
+    private StubPaymentClient paymentClient;
     private OrderController controller;
 
     @BeforeEach
     void setUp() {
         productClient = new StubProductClient();
-        OrderService orderService = new OrderService(productClient);
+        paymentClient = new StubPaymentClient();
+        OrderService orderService = new OrderService(productClient, paymentClient);
         controller = new OrderController(orderService);
     }
 
@@ -42,7 +46,22 @@ class OrderControllerTest {
         assertEquals(2L, response.getBody().getProductId());
         assertEquals(2, response.getBody().getQuantity());
         assertEquals(new BigDecimal("159.98"), response.getBody().getTotalAmount());
-        assertEquals("CREATED", response.getBody().getStatus());
+        assertEquals("CONFIRMED", response.getBody().getStatus());
+    }
+
+    @Test
+    void failedPaymentCreatesPaymentFailedOrder() {
+        productClient.returnProduct(
+                new ProductResponse(1L, "Laptop", new BigDecimal("999.99"), 10)
+        );
+        paymentClient.returnStatus("FAILED");
+
+        ResponseEntity<Order> response = controller.createOrder(new OrderRequest(1L, 2));
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(new BigDecimal("1999.98"), response.getBody().getTotalAmount());
+        assertEquals("PAYMENT_FAILED", response.getBody().getStatus());
     }
 
     @Test
@@ -119,6 +138,24 @@ class OrderControllerTest {
         @Override
         public Optional<ProductResponse> getProductById(Long productId) {
             return product.filter(value -> value.getId().equals(productId));
+        }
+    }
+
+    private static class StubPaymentClient extends PaymentClient {
+
+        private String status = "SUCCESS";
+
+        StubPaymentClient() {
+            super("http://localhost:8082");
+        }
+
+        void returnStatus(String status) {
+            this.status = status;
+        }
+
+        @Override
+        public PaymentResponse createPayment(Long orderId, BigDecimal amount) {
+            return new PaymentResponse(1L, orderId, amount, status);
         }
     }
 }

@@ -5,7 +5,7 @@ public class Product {
     private final Long id;
     private final String name;
     private final double price;
-    private final int stock;
+    private int stock;
 
     public Product(Long id, String name, double price, int stock) {
         this.id = id;
@@ -28,5 +28,9 @@ public class Product {
 
     public int getStock() {
         return stock;
+    }
+
+    public void reduceStock(int quantity) {
+        stock -= quantity;
     }
 }

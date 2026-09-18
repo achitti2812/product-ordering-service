@@ -56,9 +56,14 @@ public class OrderService {
 
         long orderId = nextOrderId.getAndIncrement();
         PaymentResponse payment = paymentClient.createPayment(orderId, totalAmount);
-        String orderStatus = "SUCCESS".equals(payment.getStatus())
-                ? CONFIRMED_STATUS
-                : PAYMENT_FAILED_STATUS;
+        String orderStatus;
+
+        if ("SUCCESS".equals(payment.getStatus())) {
+            productClient.reduceStock(product.getId(), request.getQuantity());
+            orderStatus = CONFIRMED_STATUS;
+        } else {
+            orderStatus = PAYMENT_FAILED_STATUS;
+        }
 
         Order order = new Order(
                 orderId,

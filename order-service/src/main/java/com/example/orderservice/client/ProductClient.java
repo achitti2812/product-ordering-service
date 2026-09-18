@@ -1,6 +1,7 @@
 package com.example.orderservice.client;
 
 import com.example.orderservice.model.ProductResponse;
+import com.example.orderservice.model.StockRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -28,5 +29,13 @@ public class ProductClient {
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
         }
+    }
+
+    public ProductResponse reduceStock(Long productId, int quantity) {
+        return restClient.put()
+                .uri("/products/{id}/stock", productId)
+                .body(new StockRequest(quantity))
+                .retrieve()
+                .body(ProductResponse.class);
     }
 }

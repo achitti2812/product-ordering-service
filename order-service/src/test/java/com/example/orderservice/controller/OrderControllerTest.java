@@ -36,7 +36,7 @@ class OrderControllerTest {
     }
 
     @Test
-    void createsOrderSuccessfully() {
+    void successfulPaymentCreatesConfirmedOrderAndReducesStock() {
         productClient.returnProduct(headphones());
 
         ResponseEntity<Order> response = controller.createOrder(new OrderRequest(2L, 2));
@@ -47,6 +47,7 @@ class OrderControllerTest {
         assertEquals(2, response.getBody().getQuantity());
         assertEquals(new BigDecimal("159.98"), response.getBody().getTotalAmount());
         assertEquals("CONFIRMED", response.getBody().getStatus());
+        assertEquals(2, productClient.getReducedQuantity());
     }
 
     @Test
@@ -62,6 +63,7 @@ class OrderControllerTest {
         assertNotNull(response.getBody());
         assertEquals(new BigDecimal("1999.98"), response.getBody().getTotalAmount());
         assertEquals("PAYMENT_FAILED", response.getBody().getStatus());
+        assertEquals(0, productClient.getReducedQuantity());
     }
 
     @Test
@@ -126,6 +128,7 @@ class OrderControllerTest {
     private static class StubProductClient extends ProductClient {
 
         private Optional<ProductResponse> product = Optional.empty();
+        private int reducedQuantity;
 
         StubProductClient() {
             super("http://localhost:8080");
@@ -138,6 +141,16 @@ class OrderControllerTest {
         @Override
         public Optional<ProductResponse> getProductById(Long productId) {
             return product.filter(value -> value.getId().equals(productId));
+        }
+
+        @Override
+        public ProductResponse reduceStock(Long productId, int quantity) {
+            reducedQuantity += quantity;
+            return product.orElseThrow();
+        }
+
+        int getReducedQuantity() {
+            return reducedQuantity;
         }
     }
 

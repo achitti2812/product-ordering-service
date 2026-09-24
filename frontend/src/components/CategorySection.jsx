@@ -33,7 +33,7 @@ const categories = [
   },
 ]
 
-function CategorySection() {
+function CategorySection({ activeCategory, onSelectCategory }) {
   return (
     <section className="section page-shell" aria-labelledby="categories-heading">
       <div className="section-heading">
@@ -46,7 +46,13 @@ function CategorySection() {
 
       <div className="category-grid">
         {categories.map(({ name, note, icon: Icon, className }) => (
-          <article className={`category-card ${className}`} key={name}>
+          <button
+            className={`category-card ${className} ${activeCategory === name ? 'category-card-active' : ''}`}
+            type="button"
+            onClick={() => onSelectCategory(name)}
+            aria-pressed={activeCategory === name}
+            key={name}
+          >
             <div className="category-icon" aria-hidden="true">
               <Icon size={30} strokeWidth={1.7} />
             </div>
@@ -54,7 +60,7 @@ function CategorySection() {
               <h3>{name}</h3>
               <p>{note}</p>
             </div>
-          </article>
+          </button>
         ))}
       </div>
     </section>

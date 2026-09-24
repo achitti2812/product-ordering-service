@@ -1,36 +1,38 @@
 import { ShoppingBag } from 'lucide-react'
-
-const currency = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
+import { Link, useLocation } from 'react-router-dom'
+import { formatCurrency } from '../utils/formatCurrency.js'
+import { showProductFallback } from '../utils/imageFallback.js'
 
 function ProductCard({ product }) {
   const isOutOfStock = product.stock <= 0
-
-  function useFallbackImage(event) {
-    event.currentTarget.onerror = null
-    event.currentTarget.src = '/product-placeholder.svg'
-  }
+  const location = useLocation()
+  const returnTo = `${location.pathname}${location.search}#catalog`
+  const productLink = `/products/${product.id}`
 
   return (
     <article className="product-card">
       <div className="product-image-wrap">
-        <img
-          className="product-image"
-          src={product.imageUrl}
-          alt={product.name}
-          loading="lazy"
-          onError={useFallbackImage}
-        />
+        <Link to={productLink} state={{ from: returnTo }} aria-label={`View ${product.name}`}>
+          <img
+            className="product-image"
+            src={product.imageUrl}
+            alt={product.name}
+            loading="lazy"
+            onError={showProductFallback}
+          />
+        </Link>
         <span className="product-category">{product.category}</span>
       </div>
 
       <div className="product-content">
-        <h3>{product.name}</h3>
+        <h3>
+          <Link className="product-name-link" to={productLink} state={{ from: returnTo }}>
+            {product.name}
+          </Link>
+        </h3>
         <p className="product-description">{product.description}</p>
         <div className="product-meta">
-          <span className="product-price">{currency.format(product.price)}</span>
+          <span className="product-price">{formatCurrency(product.price)}</span>
           <span className={`stock-status ${isOutOfStock ? 'stock-out' : ''}`}>
             {isOutOfStock ? 'Out of stock' : `${product.stock} in stock`}
           </span>

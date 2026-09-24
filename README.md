@@ -35,7 +35,9 @@ Order Service :8081
 
 - Displays a responsive e-commerce home page.
 - Loads all product data from Product Service rather than duplicating it.
-- Includes intentional placeholders for search, account, orders, and cart features planned for later steps.
+- Supports shareable product search and category filters.
+- Includes dedicated product details routes.
+- Keeps account, orders, and cart controls as intentional placeholders for later steps.
 
 ### Product Service
 
@@ -65,7 +67,11 @@ product-ordering-service/
 │   ├── public/
 │   ├── src/
 │   │   ├── components/
-│   │   └── services/
+│   │   ├── constants/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── test/
+│   │   └── utils/
 │   ├── package.json
 │   └── vite.config.js
 ├── backend/
@@ -77,6 +83,24 @@ product-ordering-service/
 ```
 
 Each backend service has its own `pom.xml` and can be built or started independently.
+
+## Frontend Product Browsing
+
+Search and category selections are stored in the browser URL, so filtered catalog views can be refreshed, bookmarked, and shared:
+
+```text
+http://localhost:5173/?search=laptop
+http://localhost:5173/?category=Fashion
+http://localhost:5173/?category=Electronics&search=wireless
+```
+
+Selecting a product opens its dedicated route. The page fetches that product directly from Product Service, so refreshing the route also works:
+
+```text
+http://localhost:5173/products/2
+```
+
+Search is submitted with Enter or the search button. Category navigation and category cards use the same backend filters, and active filters can be cleared independently.
 
 ## Order Flow
 
@@ -306,6 +330,14 @@ curl -i http://localhost:8080/products/1
 
 ## Testing
 
+Run the focused frontend tests and production build:
+
+```bash
+cd frontend
+npm test
+npm run build
+```
+
 Run each service's tests independently:
 
 ```bash
@@ -325,6 +357,7 @@ mvn clean verify
 
 Current test counts:
 
+- React Frontend: 9 tests
 - Product Service: 15 tests
 - Order Service: 7 tests
 - Payment Service: 5 tests

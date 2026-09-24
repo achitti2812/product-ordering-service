@@ -1,11 +1,7 @@
 import { ArrowRight, Check, Package, ShieldCheck, Truck } from 'lucide-react'
+import { showProductFallback } from '../utils/imageFallback.js'
 
 function Hero({ products }) {
-  function useFallbackImage(event) {
-    event.currentTarget.onerror = null
-    event.currentTarget.src = '/product-placeholder.svg'
-  }
-
   return (
     <section className="hero page-shell" aria-labelledby="hero-heading">
       <div className="hero-content">
@@ -32,7 +28,7 @@ function Hero({ products }) {
           {products.length > 0 ? (
             products.slice(0, 3).map((product, index) => (
               <article className={`hero-product hero-product-${index + 1}`} key={product.id}>
-                <img src={product.imageUrl} alt="" onError={useFallbackImage} />
+                <img src={product.imageUrl} alt="" onError={showProductFallback} />
                 <span>{product.name}</span>
               </article>
             ))

@@ -9,11 +9,13 @@ import {
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PRODUCT_CATEGORIES } from '../constants/catalog.js'
+import { useCart } from '../context/CartContext.jsx'
 import { buildCatalogSearch, readCatalogFilters } from '../utils/catalogUrl.js'
 
 function Header() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { cartItemCount } = useCart()
   const isHomePage = location.pathname === '/'
   const currentFilters = isHomePage
     ? readCatalogFilters(new URLSearchParams(location.search))
@@ -95,13 +97,17 @@ function Header() {
             <PackageCheck size={21} />
             <span>Orders</span>
           </button>
-          <button className="header-action cart-action" type="button" disabled title="Cart functionality arrives in Step 4">
+          <Link
+            className="header-action cart-action"
+            to="/cart"
+            aria-label={`Cart with ${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'}`}
+          >
             <span className="cart-icon-wrap">
               <ShoppingBag size={21} />
-              <span className="cart-count" aria-label="0 items in cart">0</span>
+              <span className="cart-count" aria-hidden="true">{cartItemCount}</span>
             </span>
             <span>Cart</span>
-          </button>
+          </Link>
         </nav>
       </div>
 

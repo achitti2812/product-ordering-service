@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, PackageOpen, RefreshCw, ShoppingBag, WifiOff } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { useCart } from '../context/CartContext.jsx'
 import { getProductById, ProductNotFoundError } from '../services/productService.js'
 import { buildCatalogSearch } from '../utils/catalogUrl.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
@@ -9,10 +10,12 @@ import { showProductFallback } from '../utils/imageFallback.js'
 function ProductDetailsPage() {
   const { productId } = useParams()
   const location = useLocation()
+  const { addToCart, getItemQuantity } = useCart()
   const [product, setProduct] = useState(null)
   const [status, setStatus] = useState('loading')
   const [retryVersion, setRetryVersion] = useState(0)
   const backTo = location.state?.from || '/#catalog'
+  const backLabel = location.state?.backLabel || 'Back to products'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -89,13 +92,15 @@ function ProductDetailsPage() {
   }
 
   const isOutOfStock = product.stock <= 0
+  const cartQuantity = getItemQuantity(product.id)
+  const atStockLimit = !isOutOfStock && cartQuantity >= product.stock
   const categoryUrl = `/${buildCatalogSearch({ category: product.category })}#catalog`
 
   return (
     <main className="product-details-page page-shell">
       <Link className="back-link" to={backTo}>
         <ArrowLeft size={17} />
-        Back to products
+        {backLabel}
       </Link>
 
       <article className="product-details">
@@ -125,13 +130,29 @@ function ProductDetailsPage() {
           <button
             className="add-to-cart details-cart-button"
             type="button"
-            disabled
-            title={isOutOfStock ? 'This product is out of stock' : 'Cart functionality arrives in Step 4'}
+            aria-label={`Add ${product.name} to cart`}
+            onClick={() => addToCart(product)}
+            disabled={isOutOfStock || atStockLimit}
+            title={isOutOfStock
+              ? 'This product is out of stock'
+              : atStockLimit
+                ? 'Maximum available quantity is already in your cart'
+                : `Add ${product.name} to cart`}
           >
             <ShoppingBag size={19} />
-            {isOutOfStock ? 'Out of stock' : 'Add to cart'}
+            {isOutOfStock
+              ? 'Out of stock'
+              : atStockLimit
+                ? 'Stock limit reached'
+                : cartQuantity > 0
+                  ? `Add another (${cartQuantity} in cart)`
+                  : 'Add to cart'}
           </button>
-          <p className="cart-coming-soon">Cart functionality will be available in Step 4.</p>
+          {cartQuantity > 0 && !atStockLimit && (
+            <p className="cart-feedback" role="status">
+              {cartQuantity} {cartQuantity === 1 ? 'unit' : 'units'} currently in your cart.
+            </p>
+          )}
         </div>
       </article>
     </main>

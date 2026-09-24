@@ -37,7 +37,8 @@ Order Service :8081
 - Loads all product data from Product Service rather than duplicating it.
 - Supports shareable product search and category filters.
 - Includes dedicated product details routes.
-- Keeps account, orders, and cart controls as intentional placeholders for later steps.
+- Includes a stock-aware shopping cart that persists in the browser.
+- Keeps account, orders, and checkout as intentional placeholders for later steps.
 
 ### Product Service
 
@@ -68,6 +69,7 @@ product-ordering-service/
 │   ├── src/
 │   │   ├── components/
 │   │   ├── constants/
+│   │   ├── context/
 │   │   ├── pages/
 │   │   ├── services/
 │   │   ├── test/
@@ -101,6 +103,18 @@ http://localhost:5173/products/2
 ```
 
 Search is submitted with Enter or the search button. Category navigation and category cards use the same backend filters, and active filters can be cleared independently.
+
+## Frontend Shopping Cart
+
+The cart is available at:
+
+```text
+http://localhost:5173/cart
+```
+
+Products can be added from catalog cards or product details pages. Adding the same product again increases its quantity, while the header badge shows the total quantity across all cart items. The cart provides quantity controls, item subtotals, a cart subtotal, remove and clear actions, and prevents quantities from exceeding current product stock.
+
+Cart data is stored under the versioned browser `localStorage` key `reacspi-cart-v1`, so it remains after a page refresh. When the cart page opens, it asks Product Service for current prices and stock and explains any item that needs attention. The cart is frontend-only in this step: the checkout button is intentionally disabled, and no orders, payments, or inventory changes occur from cart actions.
 
 ## Order Flow
 
@@ -357,7 +371,7 @@ mvn clean verify
 
 Current test counts:
 
-- React Frontend: 9 tests
+- React Frontend: 19 tests
 - Product Service: 15 tests
 - Order Service: 7 tests
 - Payment Service: 5 tests

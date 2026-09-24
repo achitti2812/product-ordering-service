@@ -1,13 +1,17 @@
 import { ShoppingBag } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
+import { useCart } from '../context/CartContext.jsx'
 import { formatCurrency } from '../utils/formatCurrency.js'
 import { showProductFallback } from '../utils/imageFallback.js'
 
 function ProductCard({ product }) {
   const isOutOfStock = product.stock <= 0
+  const { addToCart, getItemQuantity } = useCart()
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}#catalog`
   const productLink = `/products/${product.id}`
+  const cartQuantity = getItemQuantity(product.id)
+  const atStockLimit = !isOutOfStock && cartQuantity >= product.stock
 
   return (
     <article className="product-card">
@@ -40,11 +44,23 @@ function ProductCard({ product }) {
         <button
           className="add-to-cart"
           type="button"
-          disabled
-          title={isOutOfStock ? 'This product is out of stock' : 'Cart functionality arrives in Step 4'}
+          aria-label={`Add ${product.name} to cart`}
+          onClick={() => addToCart(product)}
+          disabled={isOutOfStock || atStockLimit}
+          title={isOutOfStock
+            ? 'This product is out of stock'
+            : atStockLimit
+              ? 'Maximum available quantity is already in your cart'
+              : `Add ${product.name} to cart`}
         >
           <ShoppingBag size={18} />
-          {isOutOfStock ? 'Out of stock' : 'Add to cart'}
+          {isOutOfStock
+            ? 'Out of stock'
+            : atStockLimit
+              ? 'Stock limit reached'
+              : cartQuantity > 0
+                ? `Add another (${cartQuantity} in cart)`
+                : 'Add to cart'}
         </button>
       </div>
     </article>

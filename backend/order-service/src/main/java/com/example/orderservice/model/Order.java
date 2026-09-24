@@ -1,19 +1,18 @@
 package com.example.orderservice.model;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public class Order {
 
     private final Long id;
-    private final Long productId;
-    private final int quantity;
+    private final List<OrderItem> items;
     private final BigDecimal totalAmount;
     private final String status;
 
-    public Order(Long id, Long productId, int quantity, BigDecimal totalAmount, String status) {
+    public Order(Long id, List<OrderItem> items, BigDecimal totalAmount, String status) {
         this.id = id;
-        this.productId = productId;
-        this.quantity = quantity;
+        this.items = List.copyOf(items);
         this.totalAmount = totalAmount;
         this.status = status;
     }
@@ -22,12 +21,8 @@ public class Order {
         return id;
     }
 
-    public Long getProductId() {
-        return productId;
-    }
-
-    public int getQuantity() {
-        return quantity;
+    public List<OrderItem> getItems() {
+        return items;
     }
 
     public BigDecimal getTotalAmount() {

@@ -1,23 +1,16 @@
 package com.example.orderservice.model;
 
-import java.util.List;
-
-public class OrderRequest {
+public class OrderItemRequest {
 
     private Long productId;
     private Integer quantity;
-    private List<OrderItemRequest> items;
 
-    public OrderRequest() {
+    public OrderItemRequest() {
     }
 
-    public OrderRequest(Long productId, Integer quantity) {
+    public OrderItemRequest(Long productId, Integer quantity) {
         this.productId = productId;
         this.quantity = quantity;
-    }
-
-    public OrderRequest(List<OrderItemRequest> items) {
-        this.items = items;
     }
 
     public Long getProductId() {
@@ -34,13 +27,5 @@ public class OrderRequest {
 
     public void setQuantity(Integer quantity) {
         this.quantity = quantity;
-    }
-
-    public List<OrderItemRequest> getItems() {
-        return items;
-    }
-
-    public void setItems(List<OrderItemRequest> items) {
-        this.items = items;
     }
 }

@@ -49,9 +49,10 @@ Order Service :8081
 
 ### Order Service
 
-- Coordinates the complete ordering process.
-- Calls Product Service to validate products and stock.
-- Calls Payment Service to process a simulated payment.
+- Coordinates an order containing one or more products.
+- Calls Product Service to validate every product and its stock before payment.
+- Calculates line totals and the complete order total with `BigDecimal`.
+- Calls Payment Service once for the complete order total.
 - Stores the final order in memory.
 
 ### Payment Service
@@ -119,11 +120,11 @@ Cart data is stored under the versioned browser `localStorage` key `reacspi-cart
 ## Order Flow
 
 1. The client sends `POST /orders` to Order Service.
-2. Order Service calls Product Service.
-3. The product, requested quantity, and available stock are validated.
-4. Order Service calculates the total amount.
-5. Order Service calls Payment Service.
-6. If payment succeeds, Order Service asks Product Service to reduce the stock.
+2. Order Service fetches every requested product from Product Service.
+3. All products, quantities, and available stock are validated before payment.
+4. Order Service calculates each line total and the complete order total.
+5. Order Service calls Payment Service once for that complete total.
+6. If payment succeeds, Order Service asks Product Service to reduce stock for every item.
 7. The order is stored with status `CONFIRMED`.
 8. If payment fails, stock is unchanged and the order is stored with status `PAYMENT_FAILED`.
 
@@ -187,12 +188,20 @@ Example updated product:
 | `POST` | `/orders` | Validate, pay for, and create an order |
 | `GET` | `/orders/{id}` | Return one order |
 
-Example order request:
+Example multi-product order request:
 
 ```json
 {
-  "productId": 2,
-  "quantity": 2
+  "items": [
+    {
+      "productId": 2,
+      "quantity": 2
+    },
+    {
+      "productId": 3,
+      "quantity": 1
+    }
+  ]
 }
 ```
 
@@ -201,12 +210,37 @@ Example confirmed order:
 ```json
 {
   "id": 1,
-  "productId": 2,
-  "quantity": 2,
-  "totalAmount": 159.98,
+  "items": [
+    {
+      "productId": 2,
+      "productName": "Headphones",
+      "quantity": 2,
+      "unitPrice": 79.99,
+      "lineTotal": 159.98
+    },
+    {
+      "productId": 3,
+      "productName": "Keyboard",
+      "quantity": 1,
+      "unitPrice": 49.99,
+      "lineTotal": 49.99
+    }
+  ],
+  "totalAmount": 209.97,
   "status": "CONFIRMED"
 }
 ```
+
+The original single-product request remains supported for backward compatibility:
+
+```json
+{
+  "productId": 2,
+  "quantity": 2
+}
+```
+
+Duplicate product IDs in `items` are combined into one order item before stock validation. A request must use either `items` or the original single-product fields, not both.
 
 ### Payment Service
 
@@ -296,26 +330,28 @@ Restart all services before following this example so the in-memory data begins 
 
 ### Successful order
 
-1. Check that Headphones start with stock `25`:
+1. Check that Headphones start with stock `25` and Keyboard starts with stock `40`:
 
 ```bash
 curl -i http://localhost:8080/products/2
+curl -i http://localhost:8080/products/3
 ```
 
-2. Create an order for two Headphones:
+2. Create one order for two Headphones and one Keyboard:
 
 ```bash
 curl -i -X POST http://localhost:8081/orders \
   -H "Content-Type: application/json" \
-  -d '{"productId":2,"quantity":2}'
+  -d '{"items":[{"productId":2,"quantity":2},{"productId":3,"quantity":1}]}'
 ```
 
-The total is `159.98`, so payment succeeds and the order status is `CONFIRMED`.
+The line totals are `159.98` and `49.99`. The order total is `209.97`, so the single payment succeeds and the order status is `CONFIRMED`.
 
-3. Confirm that Headphones stock was reduced from `25` to `23`:
+3. Confirm that Headphones stock changed from `25` to `23` and Keyboard stock changed from `40` to `39`:
 
 ```bash
 curl -i http://localhost:8080/products/2
+curl -i http://localhost:8080/products/3
 ```
 
 ### Failed-payment order
@@ -326,20 +362,31 @@ curl -i http://localhost:8080/products/2
 curl -i http://localhost:8080/products/1
 ```
 
-5. Create an order for two Laptops:
+5. Create an order for one Laptop and one Headphones unit:
 
 ```bash
 curl -i -X POST http://localhost:8081/orders \
   -H "Content-Type: application/json" \
-  -d '{"productId":1,"quantity":2}'
+  -d '{"items":[{"productId":1,"quantity":1},{"productId":2,"quantity":1}]}'
 ```
 
-The total is `1999.98`, so the simulated payment fails and the order status is `PAYMENT_FAILED`.
+The total is `1079.98`, so the simulated payment fails and the order status is `PAYMENT_FAILED`.
 
-6. Confirm that Laptop stock is still `10`:
+6. Confirm that Laptop stock is still `10` and Headphones stock is unchanged:
 
 ```bash
 curl -i http://localhost:8080/products/1
+curl -i http://localhost:8080/products/2
+```
+
+### Invalid stock
+
+This request is rejected before Payment Service is called because the requested Headphones quantity exceeds stock:
+
+```bash
+curl -i -X POST http://localhost:8081/orders \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"productId":2,"quantity":100},{"productId":3,"quantity":1}]}'
 ```
 
 ## Testing
@@ -373,7 +420,7 @@ Current test counts:
 
 - React Frontend: 19 tests
 - Product Service: 15 tests
-- Order Service: 7 tests
+- Order Service: 18 tests
 - Payment Service: 5 tests
 
 ## Important Note
@@ -382,4 +429,6 @@ Current test counts:
 - Restarting a service resets that service's data and ID counters.
 - Payment processing is simulated and does not contact a real payment provider.
 - Order Service reads the local Product and Payment Service URLs from its `application.properties`.
+- A payment succeeds before stock is reduced. If a later stock update fails, the order is stored as `INVENTORY_UPDATE_FAILED` and the problem is logged rather than reported as confirmed.
+- Stock is updated one item at a time. Without a distributed transaction or compensation workflow, an unexpected later update failure can leave earlier items reduced. This limitation is intentional for this learning project.
 - The project is intentionally simple and is not intended to demonstrate production infrastructure or distributed transaction handling.

@@ -11,8 +11,10 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ProductControllerTest {
@@ -21,9 +23,9 @@ class ProductControllerTest {
 
     @Test
     void returnsAllProducts() {
-        List<Product> products = controller.getAllProducts();
+        List<Product> products = controller.getProducts(null, null);
 
-        assertEquals(3, products.size());
+        assertEquals(50, products.size());
         assertEquals("Laptop", products.get(0).getName());
         assertEquals("Headphones", products.get(1).getName());
         assertEquals("Keyboard", products.get(2).getName());
@@ -36,6 +38,9 @@ class ProductControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Headphones", response.getBody().getName());
+        assertEquals("Electronics", response.getBody().getCategory());
+        assertFalse(response.getBody().getDescription().isBlank());
+        assertTrue(response.getBody().getImageUrl().startsWith("https://placehold.co/"));
     }
 
     @Test
@@ -83,5 +88,69 @@ class ProductControllerTest {
         );
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    void filtersProductsByElectronicsCategory() {
+        List<Product> products = controller.getProducts("Electronics", null);
+
+        assertEquals(10, products.size());
+        assertTrue(products.stream().allMatch(product -> product.getCategory().equals("Electronics")));
+    }
+
+    @Test
+    void filtersProductsByFashionCategory() {
+        List<Product> products = controller.getProducts("Fashion", null);
+
+        assertEquals(10, products.size());
+        assertTrue(products.stream().allMatch(product -> product.getCategory().equals("Fashion")));
+    }
+
+    @Test
+    void categoryFilterIsCaseInsensitive() {
+        List<Product> products = controller.getProducts("electronics", null);
+
+        assertEquals(10, products.size());
+        assertTrue(products.stream().allMatch(product -> product.getCategory().equals("Electronics")));
+    }
+
+    @Test
+    void searchesProductsByName() {
+        List<Product> products = controller.getProducts(null, "laptop");
+
+        assertEquals(1, products.size());
+        assertEquals(1L, products.get(0).getId());
+    }
+
+    @Test
+    void searchesProductsByDescription() {
+        List<Product> products = controller.getProducts(null, "noise-isolating");
+
+        assertEquals(1, products.size());
+        assertEquals(2L, products.get(0).getId());
+    }
+
+    @Test
+    void searchIsCaseInsensitive() {
+        List<Product> products = controller.getProducts(null, "WIRELESS");
+
+        assertEquals(2, products.size());
+        assertTrue(products.stream().anyMatch(product -> product.getId().equals(2L)));
+        assertTrue(products.stream().anyMatch(product -> product.getId().equals(7L)));
+    }
+
+    @Test
+    void combinesCategoryAndSearchFilters() {
+        List<Product> products = controller.getProducts("Electronics", "wireless");
+
+        assertEquals(2, products.size());
+        assertTrue(products.stream().allMatch(product -> product.getCategory().equals("Electronics")));
+    }
+
+    @Test
+    void returnsEmptyListWhenSearchHasNoMatches() {
+        List<Product> products = controller.getProducts(null, "does-not-exist");
+
+        assertTrue(products.isEmpty());
     }
 }

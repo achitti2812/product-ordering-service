@@ -8,7 +8,7 @@ A simple microservices-based backend project built to learn:
 - Microservices
 - Service-to-service communication
 
-The project contains three independent Maven applications. It intentionally avoids databases, message brokers, authentication, service discovery, API gateways, and other production infrastructure so that the core concepts remain easy to follow.
+The project contains three independent backend Maven applications. The `frontend` directory is reserved for the React application planned for a later phase and is intentionally empty for now. The project avoids databases, message brokers, authentication, service discovery, API gateways, and other production infrastructure so that the core concepts remain easy to follow.
 
 ## Architecture
 
@@ -26,7 +26,8 @@ Order Service :8081
 ### Product Service
 
 - Owns product data and stock.
-- Returns products and current stock levels.
+- Provides 50 sample products across five categories.
+- Supports case-insensitive category filtering and product search.
 - Reduces stock after a successful payment.
 
 ### Order Service
@@ -46,14 +47,16 @@ Order Service :8081
 
 ```text
 product-ordering-service/
-├── product-service/
-├── order-service/
-├── payment-service/
+├── frontend/
+├── backend/
+│   ├── product-service/
+│   ├── order-service/
+│   └── payment-service/
 ├── .gitignore
 └── README.md
 ```
 
-Each service has its own `pom.xml` and can be built or started independently.
+Each backend service has its own `pom.xml` and can be built or started independently.
 
 ## Order Flow
 
@@ -83,8 +86,18 @@ All communication is synchronous HTTP using Spring `RestClient`.
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/products` | Return all products |
+| `GET` | `/products?category={category}` | Filter products by category |
+| `GET` | `/products?search={text}` | Search product names and descriptions |
 | `GET` | `/products/{id}` | Return one product |
 | `PUT` | `/products/{id}/stock` | Reduce product stock |
+
+The catalog contains 10 products in each category: `Electronics`, `Fashion`, `Home & Kitchen`, `Books`, and `Sports`. Category and search parameters can also be combined:
+
+```bash
+curl "http://localhost:8080/products?category=Electronics"
+curl "http://localhost:8080/products?search=wireless"
+curl "http://localhost:8080/products?category=Electronics&search=wireless"
+```
 
 Example stock request:
 
@@ -100,8 +113,11 @@ Example updated product:
 {
   "id": 2,
   "name": "Headphones",
+  "description": "Wireless noise-isolating headphones with clear sound.",
+  "category": "Electronics",
   "price": 79.99,
-  "stock": 23
+  "stock": 23,
+  "imageUrl": "https://placehold.co/600x400?text=Headphones"
 }
 ```
 
@@ -172,21 +188,21 @@ Start each service in a separate terminal from the repository root. Start Produc
 Terminal 1 — Product Service:
 
 ```bash
-cd product-service
+cd backend/product-service
 mvn spring-boot:run
 ```
 
 Terminal 2 — Payment Service:
 
 ```bash
-cd payment-service
+cd backend/payment-service
 mvn spring-boot:run
 ```
 
 Terminal 3 — Order Service:
 
 ```bash
-cd order-service
+cd backend/order-service
 mvn spring-boot:run
 ```
 
@@ -247,23 +263,23 @@ curl -i http://localhost:8080/products/1
 Run each service's tests independently:
 
 ```bash
-cd product-service
+cd backend/product-service
 mvn clean verify
 ```
 
 ```bash
-cd order-service
+cd backend/order-service
 mvn clean verify
 ```
 
 ```bash
-cd payment-service
+cd backend/payment-service
 mvn clean verify
 ```
 
 Current test counts:
 
-- Product Service: 7 tests
+- Product Service: 15 tests
 - Order Service: 7 tests
 - Payment Service: 5 tests
 

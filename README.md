@@ -1,18 +1,26 @@
 # Product Ordering Service
 
-A simple microservices-based backend project built to learn:
+A simple full-stack shopping project built to learn:
 
 - Java
 - Spring Boot
+- React
 - REST APIs
 - Microservices
 - Service-to-service communication
 
-The project contains three independent backend Maven applications. The `frontend` directory is reserved for the React application planned for a later phase and is intentionally empty for now. The project avoids databases, message brokers, authentication, service discovery, API gateways, and other production infrastructure so that the core concepts remain easy to follow.
+The project contains a React storefront and three independent backend Maven applications. It avoids databases, message brokers, authentication, service discovery, API gateways, and other production infrastructure so that the core concepts remain easy to follow.
 
 ## Architecture
 
 ```text
+Browser
+  |
+  v
+React Frontend :5173
+  |
+  +--> Product Service :8080
+
 Client
   |
   v
@@ -22,6 +30,12 @@ Order Service :8081
   |
   +--> Payment Service :8082
 ```
+
+### React Frontend
+
+- Displays a responsive e-commerce home page.
+- Loads all product data from Product Service rather than duplicating it.
+- Includes intentional placeholders for search, account, orders, and cart features planned for later steps.
 
 ### Product Service
 
@@ -48,6 +62,12 @@ Order Service :8081
 ```text
 product-ordering-service/
 ├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   └── services/
+│   ├── package.json
+│   └── vite.config.js
 ├── backend/
 │   ├── product-service/
 │   ├── order-service/
@@ -75,6 +95,7 @@ All communication is synchronous HTTP using Spring `RestClient`.
 
 | Service | Port |
 |---|---:|
+| React Frontend | 5173 |
 | Product Service | 8080 |
 | Order Service | 8081 |
 | Payment Service | 8082 |
@@ -182,6 +203,31 @@ Requirements:
 
 - Java 17
 - Maven
+- Node.js and npm
+
+Install frontend dependencies once:
+
+```bash
+cd frontend
+npm install
+```
+
+Start Product Service before the frontend so product data is available:
+
+```bash
+mvn -f backend/product-service/pom.xml spring-boot:run
+```
+
+Then start the React development server in a separate terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173`. The frontend reads the Product Service address from `VITE_PRODUCT_API_URL`. For local development, copy `frontend/.env.example` to `frontend/.env` if you want to override the built-in local default.
+
+### Running all backend services
 
 Start each service in a separate terminal from the repository root. Start Product Service and Payment Service before Order Service.
 

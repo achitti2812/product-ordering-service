@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" role="img" aria-labelledby="title description">
+  <title id="title">Product image unavailable</title>
+  <desc id="description">A simple ReacSpi shopping bag placeholder</desc>
+  <rect width="600" height="400" fill="#eef2ed"/>
+  <circle cx="300" cy="188" r="112" fill="#dfe9e3"/>
+  <path d="M232 164h136l-12 126H244l-12-126Z" fill="#426b5d"/>
+  <path d="M266 168v-18c0-22 15-40 34-40s34 18 34 40v18" fill="none" stroke="#f7faf7" stroke-width="14" stroke-linecap="round"/>
+  <path d="m286 223 14 14 28-31" fill="none" stroke="#f7faf7" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="300" y="340" text-anchor="middle" fill="#315348" font-family="Arial, sans-serif" font-size="24" font-weight="700">REACSPI</text>
+</svg>

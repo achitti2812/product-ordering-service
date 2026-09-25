@@ -193,7 +193,13 @@ function CheckoutPage() {
               return (
                 <article className="checkout-item" key={item.id}>
                   <Link to={`/products/${item.id}`} state={{ from: '/checkout', backLabel: 'Back to checkout' }}>
-                    <img src={item.imageUrl} alt={item.name} onError={showProductFallback} />
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      loading="lazy"
+                      decoding="async"
+                      onError={showProductFallback}
+                    />
                   </Link>
                   <div>
                     <span>{item.category}</span>

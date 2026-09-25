@@ -51,7 +51,7 @@ function OrdersPage() {
     <main className="orders-page page-shell">
       <div className="orders-heading">
         <span className="eyebrow">Stored by Order Service</span>
-        <h1>My Orders</h1>
+        <h1>Order history</h1>
         <p>Review every order created while the in-memory Order Service is running.</p>
       </div>
 
@@ -60,7 +60,7 @@ function OrdersPage() {
       {status === 'error' && (
         <div className="details-state" role="alert">
           <span className="catalog-state-icon" aria-hidden="true"><WifiOff size={30} /></span>
-          <h2>We couldn't load your orders.</h2>
+          <h2>We couldn't load the order history.</h2>
           <p>Make sure Order Service is running, then try again.</p>
           <button className="retry-button" type="button" onClick={() => setRetryVersion((value) => value + 1)}>
             <RefreshCw size={17} />

@@ -28,7 +28,12 @@ function Hero({ products }) {
           {products.length > 0 ? (
             products.slice(0, 3).map((product, index) => (
               <article className={`hero-product hero-product-${index + 1}`} key={product.id}>
-                <img src={product.imageUrl} alt="" onError={showProductFallback} />
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  decoding="async"
+                  onError={showProductFallback}
+                />
                 <span>{product.name}</span>
               </article>
             ))

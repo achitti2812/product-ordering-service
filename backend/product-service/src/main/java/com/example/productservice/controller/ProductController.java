@@ -17,7 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/products")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${frontend.origin}")
 public class ProductController {
 
     private final ProductService productService;

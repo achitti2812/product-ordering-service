@@ -21,7 +21,7 @@ class PaymentControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new PaymentController(new PaymentService());
+        controller = new PaymentController(new PaymentService(false));
     }
 
     @Test
@@ -37,9 +37,22 @@ class PaymentControllerTest {
     }
 
     @Test
-    void createsFailedPaymentWhenAmountIsOverLimit() {
+    void createsSuccessfulPaymentForExpensivePositiveAmount() {
         ResponseEntity<Payment> response = controller.createPayment(
                 new PaymentRequest(2L, new BigDecimal("1999.98"))
+        );
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("SUCCESS", response.getBody().getStatus());
+    }
+
+    @Test
+    void createsFailedPaymentWhenFailureSimulationIsEnabled() {
+        PaymentController failureController = new PaymentController(new PaymentService(true));
+
+        ResponseEntity<Payment> response = failureController.createPayment(
+                new PaymentRequest(3L, new BigDecimal("159.98"))
         );
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());

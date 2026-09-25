@@ -77,7 +77,7 @@ function OrderResultPage() {
 
         <div className="order-result-actions">
           {order.status !== 'CONFIRMED' && <Link className="secondary-button" to="/cart">Back to cart</Link>}
-          <Link className="secondary-button" to="/orders">View My Orders</Link>
+          <Link className="secondary-button" to="/orders">View orders</Link>
           <Link className="retry-button" to="/#catalog">Continue shopping</Link>
         </div>
       </section>

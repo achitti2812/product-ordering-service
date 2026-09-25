@@ -61,7 +61,7 @@ function OrderDetailsPage() {
           <p>The order may not exist, or Order Service may have restarted and cleared its in-memory history.</p>
           <Link className="retry-button" to="/orders">
             <ArrowLeft size={17} />
-            Back to My Orders
+            Back to orders
           </Link>
         </div>
       </main>
@@ -91,7 +91,7 @@ function OrderDetailsPage() {
     <main className="order-details-page page-shell">
       <Link className="back-link" to="/orders">
         <ArrowLeft size={17} />
-        Back to My Orders
+        Back to orders
       </Link>
 
       <article className="order-details-card">
@@ -132,7 +132,7 @@ function OrderDetailsPage() {
         </div>
 
         <div className="order-details-actions">
-          <Link className="secondary-button" to="/orders">Back to My Orders</Link>
+          <Link className="secondary-button" to="/orders">Back to orders</Link>
           <Link className="retry-button" to="/#catalog">
             <ShoppingBag size={17} />
             Continue shopping

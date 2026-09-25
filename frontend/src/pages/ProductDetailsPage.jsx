@@ -108,6 +108,7 @@ function ProductDetailsPage() {
           <img
             src={product.imageUrl}
             alt={product.name}
+            decoding="async"
             onError={showProductFallback}
           />
         </div>

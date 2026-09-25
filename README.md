@@ -1,4 +1,4 @@
-# Product Ordering Service
+# ReacSpi Product Ordering Service
 
 A simple full-stack shopping project built to learn:
 
@@ -42,7 +42,7 @@ Order Service :8081
 - Includes a stock-aware shopping cart that persists in the browser.
 - Provides a checkout and order-result flow backed by Order Service.
 - Includes backend-powered order history and direct order details routes.
-- Keeps account functionality as an intentional placeholder.
+- Uses relevant remote product photography with a local fallback image.
 
 ### Product Service
 
@@ -62,8 +62,9 @@ Order Service :8081
 ### Payment Service
 
 - Simulates payment processing.
-- Returns `SUCCESS` when the amount is greater than `0` and at most `1000`.
-- Returns `FAILED` when the amount is greater than `1000`.
+- Returns `SUCCESS` for every positive amount by default, including totals over `1000`.
+- Can deterministically return `FAILED` when `payment.simulate-failure=true`.
+- Rejects zero or negative amounts with `400 Bad Request`.
 
 ## Project Structure
 
@@ -110,6 +111,8 @@ http://localhost:5173/products/2
 
 Search is submitted with Enter or the search button. Category navigation and category cards use the same backend filters, and active filters can be cleared independently.
 
+All 50 catalog entries use fixed, product-relevant Unsplash image URLs rather than random image endpoints. Shared card, detail, cart, and checkout styles keep their crop and aspect ratio consistent. If a remote image cannot load, the frontend swaps it once for `frontend/public/product-placeholder.svg` instead of displaying a broken-image icon.
+
 ## Frontend Shopping Cart
 
 The cart is available at:
@@ -121,6 +124,8 @@ http://localhost:5173/cart
 Products can be added from catalog cards or product details pages. Adding the same product again increases its quantity, while the header badge shows the total quantity across all cart items. The cart provides quantity controls, item subtotals, a cart subtotal, remove and clear actions, and prevents quantities from exceeding current product stock.
 
 Cart data is stored under the versioned browser `localStorage` key `reacspi-cart-v1`, so it remains after a page refresh. When the cart page opens, it asks Product Service for current prices and stock and explains any item that needs attention. Adding products to the cart alone does not create orders or reduce inventory.
+
+A backend restart does not automatically clear the browser cart. Clearing browser storage removes it. Because stored cart data can outlive backend data, checkout always revalidates current product availability and stock before creating an order.
 
 ## Frontend Checkout
 
@@ -218,7 +223,7 @@ Example updated product:
   "category": "Electronics",
   "price": 79.99,
   "stock": 23,
-  "imageUrl": "https://placehold.co/600x400?text=Headphones"
+  "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?..."
 }
 ```
 
@@ -236,7 +241,7 @@ An empty history returns `200 OK` with `[]`. Example history request:
 curl -i http://localhost:8081/orders
 ```
 
-Example newest-first response:
+Example newest-first response (the failed order assumes Payment Service failure simulation was enabled for that request):
 
 ```json
 [
@@ -366,6 +371,15 @@ Example payment response:
 }
 ```
 
+Normal positive payments succeed. To test the failed-payment flow without relying on a hidden amount threshold, start Payment Service with failure simulation enabled:
+
+```bash
+mvn -f backend/payment-service/pom.xml spring-boot:run \
+  -Dspring-boot.run.arguments=--payment.simulate-failure=true
+```
+
+Stop that process and start Payment Service normally again to disable failure simulation. The default is recorded in `backend/payment-service/src/main/resources/application.properties` as `payment.simulate-failure=false`.
+
 ## How to Run
 
 Requirements:
@@ -403,22 +417,19 @@ Start each service in a separate terminal from the repository root. Start Produc
 Terminal 1 — Product Service:
 
 ```bash
-cd backend/product-service
-mvn spring-boot:run
+mvn -f backend/product-service/pom.xml spring-boot:run
 ```
 
 Terminal 2 — Payment Service:
 
 ```bash
-cd backend/payment-service
-mvn spring-boot:run
+mvn -f backend/payment-service/pom.xml spring-boot:run
 ```
 
 Terminal 3 — Order Service:
 
 ```bash
-cd backend/order-service
-mvn spring-boot:run
+mvn -f backend/order-service/pom.xml spring-boot:run
 ```
 
 ## Example End-to-End Flow
@@ -442,7 +453,7 @@ curl -i -X POST http://localhost:8081/orders \
   -d '{"items":[{"productId":2,"quantity":2},{"productId":3,"quantity":1}]}'
 ```
 
-The line totals are `159.98` and `49.99`. The order total is `209.97`, so the single payment succeeds and the order status is `CONFIRMED`.
+The line totals are `159.98` and `49.99`. The order total is `209.97`; the single simulated payment succeeds and the order status is `CONFIRMED`.
 
 3. Confirm that Headphones stock changed from `25` to `23` and Keyboard stock changed from `40` to `39`:
 
@@ -451,7 +462,7 @@ curl -i http://localhost:8080/products/2
 curl -i http://localhost:8080/products/3
 ```
 
-### Failed-payment order
+### Expensive order
 
 4. Check that Laptop starts with stock `10`:
 
@@ -467,14 +478,18 @@ curl -i -X POST http://localhost:8081/orders \
   -d '{"items":[{"productId":1,"quantity":1},{"productId":2,"quantity":1}]}'
 ```
 
-The total is `1079.98`, so the simulated payment fails and the order status is `PAYMENT_FAILED`.
+The total is `1079.98`. It succeeds under the normal configuration, demonstrating that expensive positive orders are no longer rejected by a magic threshold.
 
-6. Confirm that Laptop stock is still `10` and Headphones stock is unchanged:
+6. Confirm that Laptop and Headphones stock were reduced after the confirmed order:
 
 ```bash
 curl -i http://localhost:8080/products/1
 curl -i http://localhost:8080/products/2
 ```
+
+### Failed-payment mode
+
+To exercise `PAYMENT_FAILED`, restart Payment Service with `payment.simulate-failure=true` using the command in the Payment Service section, then submit any valid positive order. Order Service stores the order as `PAYMENT_FAILED`, and Product Service stock remains unchanged. Restart Payment Service normally afterward to restore the default success behavior.
 
 ### Invalid stock
 
@@ -499,18 +514,15 @@ npm run build
 Run each service's tests independently:
 
 ```bash
-cd backend/product-service
-mvn clean verify
+mvn -f backend/product-service/pom.xml clean verify
 ```
 
 ```bash
-cd backend/order-service
-mvn clean verify
+mvn -f backend/order-service/pom.xml clean verify
 ```
 
 ```bash
-cd backend/payment-service
-mvn clean verify
+mvn -f backend/payment-service/pom.xml clean verify
 ```
 
 Current test counts:
@@ -518,14 +530,150 @@ Current test counts:
 - React Frontend: 51 tests
 - Product Service: 15 tests
 - Order Service: 24 tests
-- Payment Service: 5 tests
+- Payment Service: 6 tests
+
+## Environment Configuration
+
+Local development works without setting any environment variables. Spring and Vite use these localhost defaults when no override is present.
+
+### Frontend
+
+| Variable | Local default | Production purpose |
+|---|---|---|
+| `VITE_PRODUCT_API_URL` | `http://localhost:8080` | Public HTTPS URL for Product Service |
+| `VITE_ORDER_API_URL` | `http://localhost:8081` | Public HTTPS URL for Order Service |
+
+These Vite variables are read when the frontend is built. The frontend never calls Payment Service directly. Safe local examples are provided in `frontend/.env.example`; no real `.env` file is committed.
+
+### Product Service
+
+| Variable | Local default | Purpose |
+|---|---|---|
+| `PORT` | `8080` | HTTP port supplied or configured by the host |
+| `FRONTEND_ORIGIN` | `http://localhost:5173` | Exact browser origin allowed by CORS |
+
+### Order Service
+
+| Variable | Local default | Purpose |
+|---|---|---|
+| `PORT` | `8081` | HTTP port supplied or configured by the host |
+| `PRODUCT_SERVICE_URL` | `http://localhost:8080` | Product Service base URL |
+| `PAYMENT_SERVICE_URL` | `http://localhost:8082` | Payment Service base URL |
+| `FRONTEND_ORIGIN` | `http://localhost:5173` | Exact browser origin allowed by CORS |
+
+### Payment Service
+
+| Variable | Local default | Purpose |
+|---|---|---|
+| `PORT` | `8082` | HTTP port supplied or configured by the host |
+| `PAYMENT_SIMULATE_FAILURE` | `false` | Set to `true` to return `FAILED` for positive demo payments |
+
+Changing `PAYMENT_SIMULATE_FAILURE` normally requires restarting or redeploying Payment Service. It is configuration only; there is no API for changing payment behavior at runtime.
+
+## Resetting Demo Data
+
+All backend data is intentionally stored in memory:
+
+- Restart or redeploy **only Product Service** to recreate the 50-product catalog and restore every product's original stock.
+- Restart or redeploy **Order Service** to clear its complete order history.
+- Restart or redeploy **Payment Service** to clear its payment records and reset its payment ID counter.
+- Redeploying or restarting all three services resets all backend demo data.
+
+There is deliberately no reset API, admin endpoint, or reset button.
+
+The frontend cart is separate from backend data because it is stored in browser `localStorage`. Refreshing the browser or restarting a backend service does not clear it. Clear the cart in the UI or clear browser storage when a fresh cart is needed; checkout will still revalidate the current Product Service stock.
+
+## Deployment
+
+Deployment is manual and has not been performed by this repository. The React frontend is prepared for Netlify. Each Spring Boot service remains an independent Maven application that can be deployed on a Java or container-capable HTTP host such as Render, Railway, or Vercel container support.
+
+No Dockerfiles are included because Render and Railway can run the Maven applications without requiring this repository to adopt containers. If Vercel is selected later, its container support can use a separate `Dockerfile.vercel` for each backend service; those provider-specific files should be added only when that deployment target is chosen.
+
+### Netlify settings
+
+Import the existing GitHub repository in Netlify and configure:
+
+| Setting | Value |
+|---|---|
+| Base directory | `frontend` |
+| Build command | `npm run build` |
+| Publish directory | `dist` |
+
+Set these production build environment variables after the backend URLs are available:
+
+```text
+VITE_PRODUCT_API_URL=<Product Service HTTPS URL>
+VITE_ORDER_API_URL=<Order Service HTTPS URL>
+```
+
+`frontend/public/_redirects` provides the Netlify single-page-application rewrite, so refreshing routes such as `/products/2`, `/cart`, `/checkout`, `/orders`, or `/orders/1` serves `index.html` instead of returning a platform 404.
+
+After Netlify provides the frontend HTTPS URL, set the following on both Product Service and Order Service, then restart or redeploy those services:
+
+```text
+FRONTEND_ORIGIN=<Netlify HTTPS URL>
+```
+
+Use the exact origin without a path. A wildcard origin is not configured.
+
+### Generic backend settings
+
+Deploy each backend directory as a separate service. A generic Maven build command is `mvn clean package`, and the packaged Spring Boot JAR can be started with `java -jar target/<service-name>-0.0.1-SNAPSHOT.jar`.
+
+#### Product Service
+
+- Root directory: `backend/product-service`
+- Production variables:
+
+```text
+FRONTEND_ORIGIN=<Netlify HTTPS URL>
+PORT=<provider-supplied or configured port, when necessary>
+```
+
+#### Order Service
+
+- Root directory: `backend/order-service`
+- Production variables:
+
+```text
+PRODUCT_SERVICE_URL=<Product Service HTTPS URL>
+PAYMENT_SERVICE_URL=<Payment Service HTTPS URL>
+FRONTEND_ORIGIN=<Netlify HTTPS URL>
+PORT=<provider-supplied or configured port, when necessary>
+```
+
+#### Payment Service
+
+- Root directory: `backend/payment-service`
+- Production variables:
+
+```text
+PAYMENT_SIMULATE_FAILURE=false
+PORT=<provider-supplied or configured port, when necessary>
+```
+
+Payment Service does not need browser CORS because browsers never call it directly.
+
+### Manual deployment order
+
+1. Deploy Product Service.
+2. Copy its public HTTPS URL.
+3. Deploy Payment Service.
+4. Copy its public HTTPS URL.
+5. Deploy Order Service with `PRODUCT_SERVICE_URL` and `PAYMENT_SERVICE_URL` set to those backend URLs.
+6. Copy the Order Service public HTTPS URL.
+7. Deploy `frontend` to Netlify with `VITE_PRODUCT_API_URL` and `VITE_ORDER_API_URL` set to the public backend URLs.
+8. Copy the Netlify HTTPS URL.
+9. Set `FRONTEND_ORIGIN` to that exact URL on Product Service and Order Service.
+10. Restart or redeploy Product Service and Order Service so the CORS value is active.
+11. Test catalog loading, checkout, stock reduction, and order history in the live application.
 
 ## Important Note
 
 - All products, orders, and payments are stored only in memory.
 - Restarting a service resets that service's data and ID counters.
 - Order history lasts only as long as Order Service remains running and is not persisted in the browser.
-- Payment processing is simulated and does not contact a real payment provider.
+- Payment processing is simulated and does not contact a real payment provider. Positive amounts succeed by default; the explicit failure-simulation property exists only for testing failure handling.
 - The frontend clears its cart only after an order response with status `CONFIRMED`.
 - Order results are passed through router state and are not stored as order history. Refreshing `/order-result` therefore shows a no-result state.
 - Order Service reads the local Product and Payment Service URLs from its `application.properties`.

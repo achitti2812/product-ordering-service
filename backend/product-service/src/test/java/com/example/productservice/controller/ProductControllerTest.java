@@ -40,7 +40,7 @@ class ProductControllerTest {
         assertEquals("Headphones", response.getBody().getName());
         assertEquals("Electronics", response.getBody().getCategory());
         assertFalse(response.getBody().getDescription().isBlank());
-        assertTrue(response.getBody().getImageUrl().startsWith("https://placehold.co/"));
+        assertTrue(response.getBody().getImageUrl().startsWith("https://images.unsplash.com/"));
     }
 
     @Test

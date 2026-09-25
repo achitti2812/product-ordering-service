@@ -207,11 +207,6 @@ img {
   opacity: 1;
 }
 
-.header-action:disabled {
-  color: #45514c;
-  cursor: not-allowed;
-}
-
 a.header-action:hover {
   color: var(--forest);
   background: #f0f4f1;
@@ -696,7 +691,7 @@ a.header-action:focus-visible {
   position: relative;
   overflow: hidden;
   margin: 8px 8px 0;
-  background: #eef2ed;
+  background: #f0f2ee;
   border-radius: 14px;
 }
 
@@ -708,6 +703,7 @@ a.header-action:focus-visible {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
+  object-position: center;
   transition: transform 260ms ease;
 }
 
@@ -928,16 +924,6 @@ a.header-action:focus-visible {
   font-weight: 700;
 }
 
-.secondary-button {
-  padding: 10px 15px;
-  color: var(--forest);
-  background: #fff;
-  border: 1px solid #cfdad3;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight: 700;
-}
-
 .product-details-page {
   min-height: calc(100vh - 220px);
   padding-top: 44px;
@@ -976,7 +962,7 @@ a.header-action:focus-visible {
   place-items: center;
   overflow: hidden;
   min-height: 440px;
-  background: #eef2ed;
+  background: #f0f2ee;
   border-radius: 20px;
 }
 
@@ -985,6 +971,7 @@ a.header-action:focus-visible {
   height: 100%;
   max-height: 560px;
   object-fit: cover;
+  object-position: center;
 }
 
 .product-details-content {
@@ -1398,7 +1385,7 @@ a.header-action:focus-visible {
 .cart-item-image {
   align-self: start;
   overflow: hidden;
-  background: #eef2ed;
+  background: #f0f2ee;
   border-radius: 13px;
 }
 
@@ -1406,6 +1393,7 @@ a.header-action:focus-visible {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
+  object-position: center;
 }
 
 .cart-item-info {
@@ -1571,6 +1559,11 @@ a.header-action:focus-visible {
   opacity: 0.62;
 }
 
+.checkout-button:hover:not(:disabled),
+.retry-button:hover {
+  background: var(--forest-light);
+}
+
 .cart-refresh-message {
   display: flex;
   align-items: center;
@@ -1734,7 +1727,7 @@ a.header-action:focus-visible {
 
 .checkout-item > a {
   overflow: hidden;
-  background: #eef2ed;
+  background: #f0f2ee;
   border-radius: 11px;
 }
 
@@ -1742,6 +1735,7 @@ a.header-action:focus-visible {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
+  object-position: center;
 }
 
 .checkout-item div > span {
@@ -1948,8 +1942,14 @@ a.header-action:focus-visible {
   background: #fff;
   border: 1px solid #cfd9d3;
   border-radius: 10px;
+  cursor: pointer;
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.secondary-button:hover {
+  background: #f3f6f3;
+  border-color: #b9c8be;
 }
 
 .details-state {

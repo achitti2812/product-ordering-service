@@ -22,6 +22,7 @@ function ProductCard({ product }) {
             src={product.imageUrl}
             alt={product.name}
             loading="lazy"
+            decoding="async"
             onError={showProductFallback}
           />
         </Link>

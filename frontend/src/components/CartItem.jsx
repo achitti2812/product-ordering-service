@@ -20,7 +20,13 @@ function CartItem({ item, notice }) {
         state={productLinkState}
         aria-label={`View ${item.name}`}
       >
-        <img src={item.imageUrl} alt={item.name} onError={showProductFallback} />
+        <img
+          src={item.imageUrl}
+          alt={item.name}
+          loading="lazy"
+          decoding="async"
+          onError={showProductFallback}
+        />
       </Link>
 
       <div className="cart-item-info">

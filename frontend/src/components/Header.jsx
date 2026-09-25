@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  CircleUserRound,
   PackageCheck,
   Search,
   ShoppingBag,
@@ -88,11 +87,7 @@ function Header() {
           </button>
         </form>
 
-        <nav className="header-actions" aria-label="Account and shopping links">
-          <button className="header-action" type="button" disabled title="Accounts are not available yet">
-            <CircleUserRound size={21} />
-            <span>Account</span>
-          </button>
+        <nav className="header-actions" aria-label="Shopping links">
           <Link className="header-action" to="/orders">
             <PackageCheck size={21} />
             <span>Orders</span>

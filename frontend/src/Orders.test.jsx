@@ -104,9 +104,10 @@ describe('order history', () => {
 
     const ordersLink = screen.getByRole('link', { name: 'Orders' })
     expect(ordersLink).toHaveAttribute('href', '/orders')
+    expect(screen.queryByText('Account')).not.toBeInTheDocument()
     await user.click(ordersLink)
 
-    expect(await screen.findByRole('heading', { name: 'My Orders' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Order history' })).toBeInTheDocument()
     expect(getOrders).toHaveBeenCalledTimes(1)
   })
 
@@ -152,7 +153,7 @@ describe('order history', () => {
       .mockResolvedValueOnce([confirmedOrder])
     renderApp()
 
-    expect(await screen.findByRole('heading', { name: "We couldn't load your orders." })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: "We couldn't load the order history." })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Retry' }))
 
     expect(await screen.findByRole('heading', { name: '#1' })).toBeInTheDocument()
@@ -189,7 +190,7 @@ describe('order history', () => {
     renderApp('/orders/999')
 
     expect(await screen.findByRole('heading', { name: 'Order not found' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to My Orders' })).toHaveAttribute('href', '/orders')
+    expect(screen.getByRole('link', { name: 'Back to orders' })).toHaveAttribute('href', '/orders')
   })
 
   it('shows every order item, unit calculation, and the backend total', async () => {

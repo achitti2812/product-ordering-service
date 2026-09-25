@@ -41,7 +41,8 @@ Order Service :8081
 - Includes dedicated product details routes.
 - Includes a stock-aware shopping cart that persists in the browser.
 - Provides a checkout and order-result flow backed by Order Service.
-- Keeps account and order history as intentional placeholders for later steps.
+- Includes backend-powered order history and direct order details routes.
+- Keeps account functionality as an intentional placeholder.
 
 ### Product Service
 
@@ -137,7 +138,25 @@ After the backend responds, `/order-result` displays the returned order ID, item
 - `PAYMENT_FAILED`: the cart is kept so it can be reviewed.
 - `INVENTORY_UPDATE_FAILED`: the cart is kept, and the page warns against submitting the payment again.
 
-If the browser loses the response to `POST /orders`, the result is ambiguous: the backend may have processed the order even though the browser did not receive confirmation. ReacSpi keeps the cart, does not retry automatically, and warns the user not to submit again until the result can be verified. Order history, which would help resolve that situation, is intentionally deferred to the next step. Payment remains simulated; checkout does not collect card, billing, or shipping information.
+If the browser loses the response to `POST /orders`, the result is ambiguous: the backend may have processed the order even though the browser did not receive confirmation. ReacSpi keeps the cart, does not retry automatically, and warns the user not to submit again until the result can be checked in order history. Payment remains simulated; checkout does not collect card, billing, or shipping information.
+
+## Frontend Order History
+
+The Orders header link opens:
+
+```text
+http://localhost:5173/orders
+```
+
+This page fetches every order currently held by Order Service and displays newest orders first. Confirmed, failed-payment, and inventory-update-failed orders all remain visible, with distinct text and status styling. An empty history has a shopping action, while a service failure has a Retry action.
+
+Each order links to a refreshable details route such as:
+
+```text
+http://localhost:5173/orders/1
+```
+
+The details page independently requests `GET /orders/{id}` and shows all items, unit prices, line totals, the full total, and the current status message. Order history is never built from cart data or stored in browser localStorage.
 
 ## Order Flow
 
@@ -208,7 +227,63 @@ Example updated product:
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `POST` | `/orders` | Validate, pay for, and create an order |
+| `GET` | `/orders` | Return all in-memory orders, newest first |
 | `GET` | `/orders/{id}` | Return one order |
+
+An empty history returns `200 OK` with `[]`. Example history request:
+
+```bash
+curl -i http://localhost:8081/orders
+```
+
+Example newest-first response:
+
+```json
+[
+  {
+    "id": 2,
+    "items": [
+      {
+        "productId": 1,
+        "productName": "Laptop",
+        "quantity": 1,
+        "unitPrice": 999.99,
+        "lineTotal": 999.99
+      },
+      {
+        "productId": 2,
+        "productName": "Headphones",
+        "quantity": 1,
+        "unitPrice": 79.99,
+        "lineTotal": 79.99
+      }
+    ],
+    "totalAmount": 1079.98,
+    "status": "PAYMENT_FAILED"
+  },
+  {
+    "id": 1,
+    "items": [
+      {
+        "productId": 2,
+        "productName": "Headphones",
+        "quantity": 2,
+        "unitPrice": 79.99,
+        "lineTotal": 159.98
+      },
+      {
+        "productId": 3,
+        "productName": "Keyboard",
+        "quantity": 1,
+        "unitPrice": 49.99,
+        "lineTotal": 49.99
+      }
+    ],
+    "totalAmount": 209.97,
+    "status": "CONFIRMED"
+  }
+]
+```
 
 Example multi-product order request:
 
@@ -440,15 +515,16 @@ mvn clean verify
 
 Current test counts:
 
-- React Frontend: 36 tests
+- React Frontend: 51 tests
 - Product Service: 15 tests
-- Order Service: 18 tests
+- Order Service: 24 tests
 - Payment Service: 5 tests
 
 ## Important Note
 
 - All products, orders, and payments are stored only in memory.
 - Restarting a service resets that service's data and ID counters.
+- Order history lasts only as long as Order Service remains running and is not persisted in the browser.
 - Payment processing is simulated and does not contact a real payment provider.
 - The frontend clears its cart only after an order response with status `CONFIRMED`.
 - Order results are passed through router state and are not stored as order history. Refreshing `/order-result` therefore shows a no-result state.

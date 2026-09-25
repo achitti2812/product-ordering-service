@@ -93,10 +93,10 @@ function Header() {
             <CircleUserRound size={21} />
             <span>Account</span>
           </button>
-          <button className="header-action" type="button" disabled title="Order history will be added later">
+          <Link className="header-action" to="/orders">
             <PackageCheck size={21} />
             <span>Orders</span>
-          </button>
+          </Link>
           <Link
             className="header-action cart-action"
             to="/cart"

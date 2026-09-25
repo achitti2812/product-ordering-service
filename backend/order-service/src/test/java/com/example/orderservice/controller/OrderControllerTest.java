@@ -58,6 +58,71 @@ class OrderControllerTest {
     }
 
     @Test
+    void getOrdersReturnsOk() {
+        ResponseEntity<List<Order>> response = controller.getOrders();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void emptyOrderHistoryReturnsEmptyList() {
+        ResponseEntity<List<Order>> response = controller.getOrders();
+
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isEmpty());
+    }
+
+    @Test
+    void returnsMultipleOrdersNewestFirst() {
+        Order firstOrder = controller.createOrder(new OrderRequest(2L, 2)).getBody();
+        Order secondOrder = controller.createOrder(new OrderRequest(3L, 1)).getBody();
+
+        List<Order> orders = controller.getOrders().getBody();
+
+        assertNotNull(firstOrder);
+        assertNotNull(secondOrder);
+        assertNotNull(orders);
+        assertEquals(List.of(secondOrder.getId(), firstOrder.getId()),
+                orders.stream().map(Order::getId).toList());
+    }
+
+    @Test
+    void confirmedOrdersAppearInHistory() {
+        controller.createOrder(new OrderRequest(2L, 1));
+
+        List<Order> orders = controller.getOrders().getBody();
+
+        assertNotNull(orders);
+        assertEquals(1, orders.size());
+        assertEquals("CONFIRMED", orders.get(0).getStatus());
+    }
+
+    @Test
+    void failedPaymentOrdersAppearInHistory() {
+        paymentClient.returnStatus("FAILED");
+        controller.createOrder(new OrderRequest(1L, 1));
+
+        List<Order> orders = controller.getOrders().getBody();
+
+        assertNotNull(orders);
+        assertEquals(1, orders.size());
+        assertEquals("PAYMENT_FAILED", orders.get(0).getStatus());
+    }
+
+    @Test
+    void inventoryUpdateFailedOrdersAppearInHistory() {
+        productClient.failStockReductionFor(3L);
+        controller.createOrder(new OrderRequest(3L, 1));
+
+        List<Order> orders = controller.getOrders().getBody();
+
+        assertNotNull(orders);
+        assertEquals(1, orders.size());
+        assertEquals("INVENTORY_UPDATE_FAILED", orders.get(0).getStatus());
+    }
+
+    @Test
     void multiProductOrderCalculatesExactLineTotalsAndOneOrderTotal() {
         ResponseEntity<Order> response = controller.createOrder(multiItemRequest(
                 item(2L, 2),

@@ -33,11 +33,15 @@ vi.mock('./services/orderService.js', () => {
   }
 
   class MockAmbiguousOrderError extends Error {}
+  class MockOrderNotFoundError extends Error {}
 
   return {
     createOrder: vi.fn(),
+    getOrders: vi.fn(),
+    getOrderById: vi.fn(),
     OrderServiceError: MockOrderServiceError,
     AmbiguousOrderError: MockAmbiguousOrderError,
+    OrderNotFoundError: MockOrderNotFoundError,
   }
 })
 

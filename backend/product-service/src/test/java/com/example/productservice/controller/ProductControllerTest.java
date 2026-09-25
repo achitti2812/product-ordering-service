@@ -2,24 +2,60 @@ package com.example.productservice.controller;
 
 import com.example.productservice.model.Product;
 import com.example.productservice.model.StockRequest;
+import com.example.productservice.repository.ProductRepository;
+import com.example.productservice.service.ProductCatalogSeeder;
 import com.example.productservice.service.ProductService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SpringBootTest
+@Transactional
 class ProductControllerTest {
 
-    private final ProductController controller = new ProductController(new ProductService());
+    @Autowired
+    private ProductController controller;
+
+    @Autowired
+    private ProductService productService;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @Autowired
+    private ProductCatalogSeeder productCatalogSeeder;
+
+    @Test
+    void seedsAllProductsWhenDatabaseIsEmpty() {
+        assertEquals(50, productRepository.count());
+    }
+
+    @Test
+    void seedingAgainDoesNotOverwriteExistingStock() {
+        controller.reduceStock(2L, new StockRequest(2));
+
+        productCatalogSeeder.seedProductsIfEmpty();
+
+        assertEquals(23, productRepository.findById(2L).orElseThrow().getStock());
+    }
 
     @Test
     void returnsAllProducts() {
@@ -52,12 +88,14 @@ class ProductControllerTest {
     }
 
     @Test
-    void reducesStockSuccessfully() {
+    void reducesAndPersistsStockSuccessfully() {
         ResponseEntity<Product> response = controller.reduceStock(2L, new StockRequest(2));
+        productRepository.flush();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(23, response.getBody().getStock());
+        assertEquals(23, productRepository.findById(2L).orElseThrow().getStock());
     }
 
     @Test
@@ -88,6 +126,49 @@ class ProductControllerTest {
         );
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentRequestsCannotBothPurchaseTheFinalUnit() throws Exception {
+        Product product = productRepository.findById(50L).orElseThrow();
+        int originalStock = product.getStock();
+        product.setStock(1);
+        productRepository.saveAndFlush(product);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Boolean> firstResult = executor.submit(() -> reduceFinalUnit(ready, start));
+            Future<Boolean> secondResult = executor.submit(() -> reduceFinalUnit(ready, start));
+
+            ready.await();
+            start.countDown();
+
+            int successfulRequests = (firstResult.get() ? 1 : 0) + (secondResult.get() ? 1 : 0);
+            assertEquals(1, successfulRequests);
+            assertEquals(0, productRepository.findById(50L).orElseThrow().getStock());
+        } finally {
+            executor.shutdownNow();
+            Product productToRestore = productRepository.findById(50L).orElseThrow();
+            productToRestore.setStock(originalStock);
+            productRepository.saveAndFlush(productToRestore);
+        }
+    }
+
+    private boolean reduceFinalUnit(CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+        ready.countDown();
+        start.await();
+
+        try {
+            productService.reduceStock(50L, 1);
+            return true;
+        } catch (ResponseStatusException exception) {
+            assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+            return false;
+        }
     }
 
     @Test

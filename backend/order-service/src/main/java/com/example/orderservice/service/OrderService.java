@@ -8,22 +8,22 @@ import com.example.orderservice.model.OrderItemRequest;
 import com.example.orderservice.model.OrderRequest;
 import com.example.orderservice.model.PaymentResponse;
 import com.example.orderservice.model.ProductResponse;
+import com.example.orderservice.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class OrderService {
@@ -35,14 +35,19 @@ public class OrderService {
 
     private final ProductClient productClient;
     private final PaymentClient paymentClient;
-    private final List<Order> orders = new ArrayList<>();
-    private final AtomicLong nextOrderId = new AtomicLong(1);
+    private final OrderRepository orderRepository;
 
-    public OrderService(ProductClient productClient, PaymentClient paymentClient) {
+    public OrderService(
+            ProductClient productClient,
+            PaymentClient paymentClient,
+            OrderRepository orderRepository
+    ) {
         this.productClient = productClient;
         this.paymentClient = paymentClient;
+        this.orderRepository = orderRepository;
     }
 
+    @Transactional
     public Order createOrder(OrderRequest request) {
         Map<Long, Integer> requestedQuantities = normalizeRequest(request);
         List<OrderItem> orderItems = validateProductsAndCreateItems(requestedQuantities);
@@ -51,11 +56,12 @@ public class OrderService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        long orderId = nextOrderId.getAndIncrement();
+        Order order = new Order(orderItems, totalAmount, PAYMENT_FAILED_STATUS);
+        orderRepository.save(order);
         PaymentResponse payment;
 
         try {
-            payment = paymentClient.createPayment(orderId, totalAmount);
+            payment = paymentClient.createPayment(order.getId(), totalAmount);
         } catch (RestClientException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
@@ -74,19 +80,12 @@ public class OrderService {
         String orderStatus;
 
         if ("SUCCESS".equals(payment.getStatus())) {
-            orderStatus = reduceStockForAllItems(orderId, orderItems);
+            orderStatus = reduceStockForAllItems(order.getId(), orderItems);
         } else {
             orderStatus = PAYMENT_FAILED_STATUS;
         }
 
-        Order order = new Order(
-                orderId,
-                orderItems,
-                totalAmount,
-                orderStatus
-        );
-
-        orders.add(order);
+        order.setStatus(orderStatus);
         return order;
     }
 
@@ -207,15 +206,13 @@ public class OrderService {
         return CONFIRMED_STATUS;
     }
 
+    @Transactional(readOnly = true)
     public Optional<Order> getOrderById(Long id) {
-        return orders.stream()
-                .filter(order -> order.getId().equals(id))
-                .findFirst();
+        return orderRepository.findById(id);
     }
 
+    @Transactional(readOnly = true)
     public List<Order> getOrders() {
-        return orders.stream()
-                .sorted(Comparator.comparing(Order::getId).reversed())
-                .toList();
+        return orderRepository.findAllByOrderByIdDesc();
     }
 }

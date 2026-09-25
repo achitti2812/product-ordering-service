@@ -9,7 +9,7 @@ A simple full-stack shopping project built to learn:
 - Microservices
 - Service-to-service communication
 
-The project contains a React storefront and three independent backend Maven applications. It avoids databases, message brokers, authentication, service discovery, API gateways, and other production infrastructure so that the core concepts remain easy to follow.
+The project contains a React storefront and three independent backend Maven applications. PostgreSQL provides durable backend state, while the services continue communicating only through REST. The project avoids message brokers, authentication, service discovery, API gateways, and other unrelated infrastructure so that the core concepts remain easy to follow.
 
 ## Architecture
 
@@ -31,6 +31,12 @@ Order Service :8081
   +--> Product Service :8080
   |
   +--> Payment Service :8082
+
+One PostgreSQL database
+  |
+  +--> product_service schema
+  +--> order_service schema
+  +--> payment_service schema
 ```
 
 ### React Frontend
@@ -49,7 +55,8 @@ Order Service :8081
 - Owns product data and stock.
 - Provides 50 sample products across five categories.
 - Supports case-insensitive category filtering and product search.
-- Reduces stock after a successful payment.
+- Persists catalog data and stock in the `product_service` schema.
+- Reduces stock atomically after a successful payment, so concurrent requests cannot make stock negative.
 
 ### Order Service
 
@@ -57,7 +64,7 @@ Order Service :8081
 - Calls Product Service to validate every product and its stock before payment.
 - Calculates line totals and the complete order total with `BigDecimal`.
 - Calls Payment Service once for the complete order total.
-- Stores the final order in memory.
+- Persists each order and all its items atomically in the `order_service` schema.
 
 ### Payment Service
 
@@ -65,6 +72,7 @@ Order Service :8081
 - Returns `SUCCESS` for every positive amount by default, including totals over `1000`.
 - Can deterministically return `FAILED` when `payment.simulate-failure=true`.
 - Rejects zero or negative amounts with `400 Bad Request`.
+- Persists simulated payment records in the `payment_service` schema.
 
 ## Project Structure
 
@@ -87,6 +95,7 @@ product-ordering-service/
 │   ├── product-service/
 │   ├── order-service/
 │   └── payment-service/
+├── compose.yaml
 ├── .gitignore
 └── README.md
 ```
@@ -153,7 +162,7 @@ The Orders header link opens:
 http://localhost:5173/orders
 ```
 
-This page fetches every order currently held by Order Service and displays newest orders first. Confirmed, failed-payment, and inventory-update-failed orders all remain visible, with distinct text and status styling. An empty history has a shopping action, while a service failure has a Retry action.
+This page fetches every order persisted by Order Service and displays newest orders first. Confirmed, failed-payment, and inventory-update-failed orders all remain visible, with distinct text and status styling. An empty history has a shopping action, while a service failure has a Retry action.
 
 Each order links to a refreshable details route such as:
 
@@ -171,7 +180,7 @@ The details page independently requests `GET /orders/{id}` and shows all items, 
 4. Order Service calculates each line total and the complete order total.
 5. Order Service calls Payment Service once for that complete total.
 6. If payment succeeds, Order Service asks Product Service to reduce stock for every item.
-7. The order is stored with status `CONFIRMED`.
+7. The order and its items are persisted with status `CONFIRMED`.
 8. If payment fails, stock is unchanged and the order is stored with status `PAYMENT_FAILED`.
 
 All communication is synchronous HTTP using Spring `RestClient`.
@@ -232,7 +241,7 @@ Example updated product:
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `POST` | `/orders` | Validate, pay for, and create an order |
-| `GET` | `/orders` | Return all in-memory orders, newest first |
+| `GET` | `/orders` | Return all persisted orders, newest first |
 | `GET` | `/orders/{id}` | Return one order |
 
 An empty history returns `200 OK` with `[]`. Example history request:
@@ -387,6 +396,34 @@ Requirements:
 - Java 17
 - Maven
 - Node.js and npm
+- PostgreSQL 14+ (or Docker for the provided local PostgreSQL container)
+
+### Local PostgreSQL
+
+The three services share one physical database but use isolated schemas. Start the provided PostgreSQL-only development container from the repository root:
+
+```bash
+docker compose up -d postgres
+```
+
+The local defaults used by all three services are:
+
+```text
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/reacspi
+SPRING_DATASOURCE_USERNAME=reacspi
+SPRING_DATASOURCE_PASSWORD=reacspi
+```
+
+These are development credentials only. The Compose file does not containerize the Java services. Flyway automatically creates the `product_service`, `order_service`, and `payment_service` schemas and their tables as the corresponding service starts. Hibernate validates those migrations instead of creating production tables itself.
+
+If port `5432` is already in use, choose another host port and point the services to it:
+
+```bash
+POSTGRES_PORT=55432 docker compose up -d postgres
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:55432/reacspi
+```
+
+Run the Maven service commands from that same terminal, or set the datasource URL in each service terminal.
 
 Install frontend dependencies once:
 
@@ -395,7 +432,7 @@ cd frontend
 npm install
 ```
 
-Start Product Service before the frontend so product data is available:
+Start PostgreSQL and Product Service before the frontend so product data is available:
 
 ```bash
 mvn -f backend/product-service/pom.xml spring-boot:run
@@ -434,7 +471,7 @@ mvn -f backend/order-service/pom.xml spring-boot:run
 
 ## Example End-to-End Flow
 
-Restart all services before following this example so the in-memory data begins with its original values.
+Use a new local database or follow the manual reset instructions below if you need the original stock values before following this example.
 
 ### Successful order
 
@@ -528,13 +565,23 @@ mvn -f backend/payment-service/pom.xml clean verify
 Current test counts:
 
 - React Frontend: 54 tests
-- Product Service: 15 tests
-- Order Service: 24 tests
+- Product Service: 18 tests
+- Order Service: 25 tests
 - Payment Service: 6 tests
 
 ## Environment Configuration
 
-Local development works without setting any environment variables. Spring and Vite use these localhost defaults when no override is present.
+Local development works without setting application environment variables after the provided PostgreSQL container is running. Spring and Vite use the localhost and development-database defaults below when no override is present.
+
+All three backend services accept the same standard datasource variables:
+
+| Variable | Local default | Production purpose |
+|---|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/reacspi` | PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `reacspi` | PostgreSQL username |
+| `SPRING_DATASOURCE_PASSWORD` | `reacspi` | PostgreSQL password |
+
+For Neon, use the JDBC form of its connection string and retain SSL, for example `jdbc:postgresql://<neon-host>/<database>?sslmode=require`. Never commit the actual host credentials or password.
 
 ### Frontend
 
@@ -551,6 +598,9 @@ These Vite variables are read when the frontend is built. The frontend never cal
 |---|---|---|
 | `PORT` | `8080` | HTTP port supplied or configured by the host |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | Exact browser origin allowed by CORS |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/reacspi` | Shared PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `reacspi` | PostgreSQL username |
+| `SPRING_DATASOURCE_PASSWORD` | `reacspi` | PostgreSQL password |
 
 ### Order Service
 
@@ -560,6 +610,9 @@ These Vite variables are read when the frontend is built. The frontend never cal
 | `PRODUCT_SERVICE_URL` | `http://localhost:8080` | Product Service base URL |
 | `PAYMENT_SERVICE_URL` | `http://localhost:8082` | Payment Service base URL |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | Exact browser origin allowed by CORS |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/reacspi` | Shared PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `reacspi` | PostgreSQL username |
+| `SPRING_DATASOURCE_PASSWORD` | `reacspi` | PostgreSQL password |
 
 ### Payment Service
 
@@ -567,25 +620,49 @@ These Vite variables are read when the frontend is built. The frontend never cal
 |---|---|---|
 | `PORT` | `8082` | HTTP port supplied or configured by the host |
 | `PAYMENT_SIMULATE_FAILURE` | `false` | Set to `true` to return `FAILED` for positive demo payments |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/reacspi` | Shared PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `reacspi` | PostgreSQL username |
+| `SPRING_DATASOURCE_PASSWORD` | `reacspi` | PostgreSQL password |
 
 Changing `PAYMENT_SIMULATE_FAILURE` normally requires restarting or redeploying Payment Service. It is configuration only; there is no API for changing payment behavior at runtime.
 
 ## Resetting Demo Data
 
-All backend data is intentionally stored in memory:
+Backend data is persistent. Restarting or redeploying Product, Order, or Payment Service does **not** reset its data. There is deliberately no public reset API, admin endpoint, or reset button.
 
-- Restart or redeploy **only Product Service** to recreate the 50-product catalog and restore every product's original stock.
-- Restart or redeploy **Order Service** to clear its complete order history.
-- Restart or redeploy **Payment Service** to clear its payment records and reset its payment ID counter.
-- Redeploying or restarting all three services resets all backend demo data.
+For local development only, stop the affected services and connect to PostgreSQL with `psql` or another SQL client. Run only the statements for the data you intend to reset:
 
-There is deliberately no reset API, admin endpoint, or reset button.
+```sql
+-- Restore the original catalog on the next Product Service start.
+TRUNCATE TABLE product_service.products;
+
+-- Clear order history and restart its generated IDs.
+TRUNCATE TABLE order_service.order_items, order_service.orders;
+ALTER SEQUENCE order_service.order_item_id_sequence RESTART WITH 1;
+ALTER SEQUENCE order_service.order_id_sequence RESTART WITH 1;
+
+-- Clear payment history and restart its generated IDs.
+TRUNCATE TABLE payment_service.payments;
+ALTER SEQUENCE payment_service.payment_id_sequence RESTART WITH 1;
+```
+
+After the product table is truncated, restart Product Service. Its startup seeder inserts the canonical 50-product catalog only when that table is empty. On ordinary restarts the table is not empty, so existing stock is preserved and no catalog row is overwritten.
 
 The frontend cart is separate from backend data because it is stored in browser `localStorage`. Refreshing the browser or restarting a backend service does not clear it. Clear the cart in the UI or clear browser storage when a fresh cart is needed; checkout will still revalidate the current Product Service stock.
 
 ## Deployment
 
 Deployment is manual and has not been performed by this repository. The React frontend is prepared for Netlify. Each Spring Boot service remains an independent Maven application and now includes a provider-specific `Dockerfile.vercel` for Vercel container deployment. The Maven applications can still be deployed without Docker on another Java host.
+
+Production uses one external PostgreSQL instance, such as Neon, with three service-owned schemas. Each service receives the same database connection credentials, runs only its own Flyway migration, and accesses only its own schema. Product and Order Service still communicate over REST; neither reads another service's tables.
+
+```text
+Netlify Frontend
+  +--> Product Service (Vercel) --> PostgreSQL / product_service
+  +--> Order Service (Vercel)   --> PostgreSQL / order_service
+          +--> Product Service
+          +--> Payment Service (Vercel) --> PostgreSQL / payment_service
+```
 
 Vercel detects a `Dockerfile.vercel` at a project's root, builds it as an OCI container image, and routes HTTP traffic to the server listening on `PORT`. Each backend service already reads `PORT` through Spring configuration, with its existing local port as the fallback. See Vercel's current [Docker container documentation](https://vercel.com/kb/guide/docker) and [monorepo documentation](https://vercel.com/docs/monorepos).
 
@@ -628,6 +705,9 @@ Deploy each backend directory as a separate service. A generic Maven build comma
 ```text
 FRONTEND_ORIGIN=<Netlify HTTPS URL>
 PORT=<provider-supplied or configured port, when necessary>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 #### Order Service
@@ -640,6 +720,9 @@ PRODUCT_SERVICE_URL=<Product Service HTTPS URL>
 PAYMENT_SERVICE_URL=<Payment Service HTTPS URL>
 FRONTEND_ORIGIN=<Netlify HTTPS URL>
 PORT=<provider-supplied or configured port, when necessary>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 #### Payment Service
@@ -650,6 +733,9 @@ PORT=<provider-supplied or configured port, when necessary>
 ```text
 PAYMENT_SIMULATE_FAILURE=false
 PORT=<provider-supplied or configured port, when necessary>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 Payment Service does not need browser CORS because browsers never call it directly.
@@ -671,6 +757,9 @@ Environment variables:
 
 ```text
 FRONTEND_ORIGIN=<Netlify HTTPS origin>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 The container defaults `PORT` to Vercel's standard container port `80`, and a Vercel project setting can override it. Running the service locally with Maven, outside the container, continues to default to port `8080`.
@@ -686,6 +775,9 @@ Environment variables:
 
 ```text
 PAYMENT_SIMULATE_FAILURE=false
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 The container defaults `PORT` to `80`, and a Vercel project setting can override it. Running the service locally with Maven continues to default to port `8082`.
@@ -703,6 +795,9 @@ Environment variables:
 PRODUCT_SERVICE_URL=<Product Service Vercel HTTPS URL>
 PAYMENT_SERVICE_URL=<Payment Service Vercel HTTPS URL>
 FRONTEND_ORIGIN=<Netlify HTTPS origin>
+SPRING_DATASOURCE_URL=<Neon PostgreSQL JDBC URL with sslmode=require>
+SPRING_DATASOURCE_USERNAME=<Neon username>
+SPRING_DATASOURCE_PASSWORD=<Neon password>
 ```
 
 Use base URLs without a trailing API path, for example `https://your-product-service.example`. The container defaults `PORT` to `80`, and a Vercel project setting can override it. Running the service locally with Maven continues to default to port `8081`.
@@ -720,33 +815,34 @@ docker build -f backend/order-service/Dockerfile.vercel \
   -t reacspi-order-service:vercel backend/order-service
 ```
 
-#### Important Vercel in-memory limitation
+#### Vercel and persistent state
 
-Vercel container deployments run as stateless functions that can scale down and create multiple instances. This project's in-memory catalog stock, orders, and payments are therefore suitable only for an educational demo: state can reset when an instance stops, and separate instances are not guaranteed to share the same data. Durable and consistent production data would require external persistence, which is intentionally outside this project's scope.
+Vercel containers remain stateless, but all mutable backend state now lives in external PostgreSQL. Container replacement or multiple application instances therefore no longer resets catalog stock, orders, or payments. The PostgreSQL driver, JPA, and Flyway are packaged inside each Spring Boot JAR; the runtime images do not need PostgreSQL client tools.
 
 ### Manual deployment order
 
-1. Create a Vercel project with Root Directory `backend/product-service` and deploy Product Service.
-2. Copy its public HTTPS URL.
-3. Create a Vercel project with Root Directory `backend/payment-service`, set `PAYMENT_SIMULATE_FAILURE=false`, and deploy Payment Service.
-4. Copy its public HTTPS URL.
-5. Create a Vercel project with Root Directory `backend/order-service`, then deploy it with `PRODUCT_SERVICE_URL` and `PAYMENT_SERVICE_URL` set to those backend URLs.
-6. Copy the Order Service public HTTPS URL.
-7. Deploy `frontend` to Netlify with `VITE_PRODUCT_API_URL` and `VITE_ORDER_API_URL` set to the public backend URLs.
-8. Copy the Netlify HTTPS URL.
-9. Set `FRONTEND_ORIGIN` to that exact URL on Product Service and Order Service.
-10. Restart or redeploy Product Service and Order Service so the CORS value is active.
-11. Test catalog loading, checkout, stock reduction, and order history in the live application.
+1. Create one Neon PostgreSQL database and copy its JDBC URL, username, and password. Ensure the JDBC URL includes `sslmode=require`.
+2. Add the three `SPRING_DATASOURCE_*` variables to all three Vercel service projects.
+3. Deploy Product Service from `backend/product-service`; Flyway creates `product_service` and the empty-table seeder inserts the 50 products.
+4. Copy the Product Service public HTTPS URL.
+5. Deploy Payment Service from `backend/payment-service` with `PAYMENT_SIMULATE_FAILURE=false`; Flyway creates `payment_service`.
+6. Copy the Payment Service public HTTPS URL.
+7. Deploy Order Service from `backend/order-service` with `PRODUCT_SERVICE_URL` and `PAYMENT_SERVICE_URL` set to those backend URLs; Flyway creates `order_service`.
+8. Copy the Order Service public HTTPS URL.
+9. Deploy `frontend` to Netlify with `VITE_PRODUCT_API_URL` and `VITE_ORDER_API_URL` set to the public backend URLs.
+10. Copy the Netlify HTTPS URL, set `FRONTEND_ORIGIN` to that exact origin on Product Service and Order Service, and redeploy those two services.
+11. Test catalog loading, checkout, persisted stock, order history, and payment retrieval. Restart/redeploy each backend once and confirm its records remain.
 
 ## Important Note
 
-- All products, orders, and payments are stored only in memory.
-- Restarting a service resets that service's data and ID counters.
-- Order history lasts only as long as Order Service remains running and is not persisted in the browser.
+- Products and stock, orders and order items, and payments are persisted in one PostgreSQL database under three isolated schemas.
+- Restarting or replacing a service does not reset its records. Product Service seeds the original 50 products only when its product table is empty.
+- Flyway owns the database structure, and Hibernate uses `ddl-auto=validate` to detect mapping/migration mismatches.
+- Order history is loaded from Order Service rather than persisted in the browser.
 - Payment processing is simulated and does not contact a real payment provider. Positive amounts succeed by default; the explicit failure-simulation property exists only for testing failure handling.
 - The frontend clears its cart only after an order response with status `CONFIRMED`.
 - Order results are passed through router state and are not stored as order history. Refreshing `/order-result` therefore shows a no-result state.
-- Order Service reads the local Product and Payment Service URLs from its `application.properties`.
+- Order Service reads Product and Payment Service URLs from environment-backed Spring configuration.
 - A payment succeeds before stock is reduced. If a later stock update fails, the order is stored as `INVENTORY_UPDATE_FAILED` and the problem is logged rather than reported as confirmed.
-- Stock is updated one item at a time. Without a distributed transaction or compensation workflow, an unexpected later update failure can leave earlier items reduced. This limitation is intentional for this learning project.
-- The project is intentionally simple and is not intended to demonstrate production infrastructure or distributed transaction handling.
+- A single product stock decrement is atomic, but multi-product stock updates still happen one item at a time. Without a distributed transaction or compensation workflow, an unexpected later update failure can leave payment recorded and earlier items reduced. This limitation is intentional for this learning project.
+- The project is intentionally simple and does not demonstrate distributed transaction handling.

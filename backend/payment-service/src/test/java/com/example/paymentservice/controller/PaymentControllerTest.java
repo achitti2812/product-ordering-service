@@ -2,11 +2,15 @@ package com.example.paymentservice.controller;
 
 import com.example.paymentservice.model.Payment;
 import com.example.paymentservice.model.PaymentRequest;
+import com.example.paymentservice.repository.PaymentRepository;
 import com.example.paymentservice.service.PaymentService;
-import org.junit.jupiter.api.BeforeEach;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -15,14 +19,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@SpringBootTest
+@Transactional
 class PaymentControllerTest {
 
+    @Autowired
     private PaymentController controller;
 
-    @BeforeEach
-    void setUp() {
-        controller = new PaymentController(new PaymentService(false));
-    }
+    @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void createsSuccessfulPayment() {
@@ -48,16 +56,22 @@ class PaymentControllerTest {
     }
 
     @Test
-    void createsFailedPaymentWhenFailureSimulationIsEnabled() {
-        PaymentController failureController = new PaymentController(new PaymentService(true));
-
-        ResponseEntity<Payment> response = failureController.createPayment(
-                new PaymentRequest(3L, new BigDecimal("159.98"))
+    void createsAndPersistsFailedPaymentWhenFailureSimulationIsEnabled() {
+        PaymentController failureController = new PaymentController(
+                new PaymentService(paymentRepository, true)
         );
 
-        assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals("FAILED", response.getBody().getStatus());
+        Payment createdPayment = failureController.createPayment(
+                new PaymentRequest(3L, new BigDecimal("159.98"))
+        ).getBody();
+        assertNotNull(createdPayment);
+
+        paymentRepository.flush();
+        entityManager.clear();
+
+        Payment persistedPayment = failureController.getPaymentById(createdPayment.getId()).getBody();
+        assertNotNull(persistedPayment);
+        assertEquals("FAILED", persistedPayment.getStatus());
     }
 
     @Test
@@ -71,16 +85,21 @@ class PaymentControllerTest {
     }
 
     @Test
-    void getsExistingPayment() {
+    void getsExistingPaymentFromDatabase() {
         Payment createdPayment = controller.createPayment(
                 new PaymentRequest(1L, new BigDecimal("159.98"))
         ).getBody();
+        assertNotNull(createdPayment);
+
+        paymentRepository.flush();
+        entityManager.clear();
 
         ResponseEntity<Payment> response = controller.getPaymentById(createdPayment.getId());
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(createdPayment.getId(), response.getBody().getId());
+        assertEquals(new BigDecimal("159.98"), response.getBody().getAmount());
     }
 
     @Test

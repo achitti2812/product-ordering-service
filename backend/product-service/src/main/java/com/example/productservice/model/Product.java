@@ -1,21 +1,46 @@
 package com.example.productservice.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import java.math.BigDecimal;
+
+@Entity
+@Table(name = "products", schema = "product_service")
 public class Product {
 
-    private final Long id;
-    private final String name;
-    private final String description;
-    private final String category;
-    private final double price;
+    @Id
+    private Long id;
+
+    @Column(nullable = false)
+    private String name;
+
+    @Column(nullable = false, length = 1000)
+    private String description;
+
+    @Column(nullable = false, length = 100)
+    private String category;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal price;
+
+    @Column(nullable = false)
     private int stock;
-    private final String imageUrl;
+
+    @Column(name = "image_url", nullable = false, length = 1000)
+    private String imageUrl;
+
+    protected Product() {
+    }
 
     public Product(
             Long id,
             String name,
             String description,
             String category,
-            double price,
+            BigDecimal price,
             int stock,
             String imageUrl
     ) {
@@ -44,7 +69,7 @@ public class Product {
         return category;
     }
 
-    public double getPrice() {
+    public BigDecimal getPrice() {
         return price;
     }
 
@@ -56,7 +81,7 @@ public class Product {
         return imageUrl;
     }
 
-    public void reduceStock(int quantity) {
-        stock -= quantity;
+    public void setStock(int stock) {
+        this.stock = stock;
     }
 }

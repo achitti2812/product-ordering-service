@@ -7,16 +7,20 @@ import com.example.orderservice.model.OrderItemRequest;
 import com.example.orderservice.model.OrderRequest;
 import com.example.orderservice.model.PaymentResponse;
 import com.example.orderservice.model.ProductResponse;
-import com.example.orderservice.service.OrderService;
+import com.example.orderservice.repository.OrderRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,23 +29,54 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@SpringBootTest
+@Transactional
 class OrderControllerTest {
 
-    private StubProductClient productClient;
-    private StubPaymentClient paymentClient;
+    @Autowired
     private OrderController controller;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @MockitoBean
+    private ProductClient productClient;
+
+    @MockitoBean
+    private PaymentClient paymentClient;
+
+    private Map<Long, ProductResponse> products;
 
     @BeforeEach
     void setUp() {
-        productClient = new StubProductClient();
-        paymentClient = new StubPaymentClient();
-        OrderService orderService = new OrderService(productClient, paymentClient);
-        controller = new OrderController(orderService);
+        products = Map.of(
+                1L, laptop(),
+                2L, headphones(),
+                3L, keyboard()
+        );
 
-        productClient.returnProduct(laptop());
-        productClient.returnProduct(headphones());
-        productClient.returnProduct(keyboard());
+        when(productClient.getProductById(anyLong()))
+                .thenAnswer(invocation -> Optional.ofNullable(products.get(invocation.getArgument(0))));
+        when(productClient.reduceStock(anyLong(), anyInt()))
+                .thenAnswer(invocation -> products.get(invocation.getArgument(0)));
+        when(paymentClient.createPayment(anyLong(), any(BigDecimal.class)))
+                .thenAnswer(invocation -> new PaymentResponse(
+                        1L,
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        "SUCCESS"
+                ));
     }
 
     @Test
@@ -100,7 +135,7 @@ class OrderControllerTest {
 
     @Test
     void failedPaymentOrdersAppearInHistory() {
-        paymentClient.returnStatus("FAILED");
+        returnPaymentStatus("FAILED");
         controller.createOrder(new OrderRequest(1L, 1));
 
         List<Order> orders = controller.getOrders().getBody();
@@ -112,7 +147,8 @@ class OrderControllerTest {
 
     @Test
     void inventoryUpdateFailedOrdersAppearInHistory() {
-        productClient.failStockReductionFor(3L);
+        when(productClient.reduceStock(eq(3L), anyInt()))
+                .thenThrow(new RestClientException("Stock update failed"));
         controller.createOrder(new OrderRequest(3L, 1));
 
         List<Order> orders = controller.getOrders().getBody();
@@ -139,21 +175,20 @@ class OrderControllerTest {
         assertEquals("Keyboard", order.getItems().get(1).getProductName());
         assertEquals(new BigDecimal("49.99"), order.getItems().get(1).getLineTotal());
         assertEquals(new BigDecimal("209.97"), order.getTotalAmount());
-        assertEquals(1, paymentClient.getCallCount());
-        assertEquals(new BigDecimal("209.97"), paymentClient.getLastAmount());
+        verify(paymentClient).createPayment(order.getId(), new BigDecimal("209.97"));
     }
 
     @Test
     void successfulPaymentReducesStockForEveryItem() {
         controller.createOrder(multiItemRequest(item(2L, 2), item(3L, 1)));
 
-        assertEquals(2, productClient.getReducedQuantity(2L));
-        assertEquals(1, productClient.getReducedQuantity(3L));
+        verify(productClient).reduceStock(2L, 2);
+        verify(productClient).reduceStock(3L, 1);
     }
 
     @Test
     void failedMultiProductPaymentDoesNotReduceAnyStock() {
-        paymentClient.returnStatus("FAILED");
+        returnPaymentStatus("FAILED");
 
         Order order = controller.createOrder(multiItemRequest(
                 item(1L, 1),
@@ -163,7 +198,7 @@ class OrderControllerTest {
         assertNotNull(order);
         assertEquals(new BigDecimal("1079.98"), order.getTotalAmount());
         assertEquals("PAYMENT_FAILED", order.getStatus());
-        assertTrue(productClient.getStockReductions().isEmpty());
+        verify(productClient, never()).reduceStock(anyLong(), anyInt());
     }
 
     @Test
@@ -175,8 +210,8 @@ class OrderControllerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
         assertTrue(exception.getReason().contains("Insufficient"));
-        assertEquals(0, paymentClient.getCallCount());
-        assertTrue(productClient.getStockReductions().isEmpty());
+        verify(paymentClient, never()).createPayment(anyLong(), any(BigDecimal.class));
+        verify(productClient, never()).reduceStock(anyLong(), anyInt());
     }
 
     @Test
@@ -188,7 +223,7 @@ class OrderControllerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
         assertTrue(exception.getReason().contains("999"));
-        assertEquals(0, paymentClient.getCallCount());
+        verify(paymentClient, never()).createPayment(anyLong(), any(BigDecimal.class));
     }
 
     @Test
@@ -235,7 +270,7 @@ class OrderControllerTest {
         assertEquals(1, order.getItems().size());
         assertEquals(3, order.getItems().get(0).getQuantity());
         assertEquals(new BigDecimal("239.97"), order.getTotalAmount());
-        assertEquals(3, productClient.getReducedQuantity(2L));
+        verify(productClient).reduceStock(2L, 3);
     }
 
     @Test
@@ -254,6 +289,21 @@ class OrderControllerTest {
     }
 
     @Test
+    void orderAndItemsCanBeReloadedFromDatabase() {
+        Order createdOrder = controller.createOrder(multiItemRequest(item(2L, 2), item(3L, 1))).getBody();
+        assertNotNull(createdOrder);
+
+        orderRepository.flush();
+        entityManager.clear();
+
+        Order reloadedOrder = controller.getOrderById(createdOrder.getId()).getBody();
+        assertNotNull(reloadedOrder);
+        assertEquals("CONFIRMED", reloadedOrder.getStatus());
+        assertEquals(2, reloadedOrder.getItems().size());
+        assertEquals(new BigDecimal("209.97"), reloadedOrder.getTotalAmount());
+    }
+
+    @Test
     void returnsNotFoundForUnknownOrder() {
         ResponseEntity<Order> response = controller.getOrderById(999L);
 
@@ -262,7 +312,8 @@ class OrderControllerTest {
 
     @Test
     void reportsProductServiceFailureAsBadGateway() {
-        productClient.makeProductServiceUnavailable();
+        when(productClient.getProductById(anyLong()))
+                .thenThrow(new RestClientException("Product Service unavailable"));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -271,12 +322,13 @@ class OrderControllerTest {
 
         assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
         assertTrue(exception.getReason().contains("Product Service"));
-        assertEquals(0, paymentClient.getCallCount());
+        verify(paymentClient, never()).createPayment(anyLong(), any(BigDecimal.class));
     }
 
     @Test
     void reportsPaymentServiceFailureAsBadGatewayWithoutReducingStock() {
-        paymentClient.makePaymentServiceUnavailable();
+        when(paymentClient.createPayment(anyLong(), any(BigDecimal.class)))
+                .thenThrow(new RestClientException("Payment Service unavailable"));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -285,12 +337,13 @@ class OrderControllerTest {
 
         assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
         assertTrue(exception.getReason().contains("Payment Service"));
-        assertTrue(productClient.getStockReductions().isEmpty());
+        verify(productClient, never()).reduceStock(anyLong(), anyInt());
     }
 
     @Test
     void storesInventoryUpdateFailedOrderWhenStockReductionFailsAfterPayment() {
-        productClient.failStockReductionFor(3L);
+        when(productClient.reduceStock(eq(3L), anyInt()))
+                .thenThrow(new RestClientException("Stock update failed"));
 
         Order order = controller.createOrder(multiItemRequest(
                 item(2L, 2),
@@ -299,12 +352,26 @@ class OrderControllerTest {
 
         assertNotNull(order);
         assertEquals("INVENTORY_UPDATE_FAILED", order.getStatus());
-        assertEquals(2, productClient.getReducedQuantity(2L));
-        assertEquals(0, productClient.getReducedQuantity(3L));
+        verify(productClient).reduceStock(2L, 2);
+        verify(productClient).reduceStock(3L, 1);
+
+        orderRepository.flush();
+        entityManager.clear();
 
         ResponseEntity<Order> storedOrder = controller.getOrderById(order.getId());
         assertEquals(HttpStatus.OK, storedOrder.getStatusCode());
+        assertNotNull(storedOrder.getBody());
         assertEquals("INVENTORY_UPDATE_FAILED", storedOrder.getBody().getStatus());
+    }
+
+    private void returnPaymentStatus(String status) {
+        when(paymentClient.createPayment(anyLong(), any(BigDecimal.class)))
+                .thenAnswer(invocation -> new PaymentResponse(
+                        1L,
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        status
+                ));
     }
 
     private void assertBadRequestWithReason(OrderRequest request, String reasonText) {
@@ -315,7 +382,7 @@ class OrderControllerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
         assertTrue(exception.getReason().contains(reasonText));
-        assertEquals(0, paymentClient.getCallCount());
+        verify(paymentClient, never()).createPayment(anyLong(), any(BigDecimal.class));
     }
 
     private OrderRequest multiItemRequest(OrderItemRequest... items) {
@@ -336,96 +403,5 @@ class OrderControllerTest {
 
     private ProductResponse keyboard() {
         return new ProductResponse(3L, "Keyboard", new BigDecimal("49.99"), 40);
-    }
-
-    private static class StubProductClient extends ProductClient {
-
-        private final Map<Long, ProductResponse> products = new LinkedHashMap<>();
-        private final Map<Long, Integer> stockReductions = new LinkedHashMap<>();
-        private boolean unavailable;
-        private Long failedStockProductId;
-
-        StubProductClient() {
-            super("http://localhost:8080");
-        }
-
-        void returnProduct(ProductResponse product) {
-            products.put(product.getId(), product);
-        }
-
-        void makeProductServiceUnavailable() {
-            unavailable = true;
-        }
-
-        void failStockReductionFor(Long productId) {
-            failedStockProductId = productId;
-        }
-
-        @Override
-        public Optional<ProductResponse> getProductById(Long productId) {
-            if (unavailable) {
-                throw new RestClientException("Product Service unavailable");
-            }
-
-            return Optional.ofNullable(products.get(productId));
-        }
-
-        @Override
-        public ProductResponse reduceStock(Long productId, int quantity) {
-            if (productId.equals(failedStockProductId)) {
-                throw new RestClientException("Stock update failed");
-            }
-
-            stockReductions.merge(productId, quantity, Integer::sum);
-            return products.get(productId);
-        }
-
-        int getReducedQuantity(Long productId) {
-            return stockReductions.getOrDefault(productId, 0);
-        }
-
-        Map<Long, Integer> getStockReductions() {
-            return stockReductions;
-        }
-    }
-
-    private static class StubPaymentClient extends PaymentClient {
-
-        private String status = "SUCCESS";
-        private int callCount;
-        private BigDecimal lastAmount;
-        private boolean unavailable;
-
-        StubPaymentClient() {
-            super("http://localhost:8082");
-        }
-
-        void returnStatus(String status) {
-            this.status = status;
-        }
-
-        void makePaymentServiceUnavailable() {
-            unavailable = true;
-        }
-
-        @Override
-        public PaymentResponse createPayment(Long orderId, BigDecimal amount) {
-            callCount++;
-            lastAmount = amount;
-
-            if (unavailable) {
-                throw new RestClientException("Payment Service unavailable");
-            }
-
-            return new PaymentResponse(1L, orderId, amount, status);
-        }
-
-        int getCallCount() {
-            return callCount;
-        }
-
-        BigDecimal getLastAmount() {
-            return lastAmount;
-        }
     }
 }

@@ -527,7 +527,7 @@ mvn -f backend/payment-service/pom.xml clean verify
 
 Current test counts:
 
-- React Frontend: 51 tests
+- React Frontend: 54 tests
 - Product Service: 15 tests
 - Order Service: 24 tests
 - Payment Service: 6 tests
@@ -585,9 +585,9 @@ The frontend cart is separate from backend data because it is stored in browser 
 
 ## Deployment
 
-Deployment is manual and has not been performed by this repository. The React frontend is prepared for Netlify. Each Spring Boot service remains an independent Maven application that can be deployed on a Java or container-capable HTTP host such as Render, Railway, or Vercel container support.
+Deployment is manual and has not been performed by this repository. The React frontend is prepared for Netlify. Each Spring Boot service remains an independent Maven application and now includes a provider-specific `Dockerfile.vercel` for Vercel container deployment. The Maven applications can still be deployed without Docker on another Java host.
 
-No Dockerfiles are included because Render and Railway can run the Maven applications without requiring this repository to adopt containers. If Vercel is selected later, its container support can use a separate `Dockerfile.vercel` for each backend service; those provider-specific files should be added only when that deployment target is chosen.
+Vercel detects a `Dockerfile.vercel` at a project's root, builds it as an OCI container image, and routes HTTP traffic to the server listening on `PORT`. Each backend service already reads `PORT` through Spring configuration, with its existing local port as the fallback. See Vercel's current [Docker container documentation](https://vercel.com/kb/guide/docker) and [monorepo documentation](https://vercel.com/docs/monorepos).
 
 ### Netlify settings
 
@@ -654,13 +654,83 @@ PORT=<provider-supplied or configured port, when necessary>
 
 Payment Service does not need browser CORS because browsers never call it directly.
 
+### Vercel backend settings
+
+Import the same GitHub repository as three separate Vercel projects. In each project, set the **Root Directory** to the service directory shown below. Leave custom build and output commands unset so Vercel can detect the `Dockerfile.vercel` located at that project root.
+
+Each Dockerfile uses its service directory as the complete Docker build context, builds the Spring Boot JAR with Maven and Java 17 in a build stage, then runs it on a Java 17 JRE image.
+
+#### Product Service on Vercel
+
+| Setting | Value |
+|---|---|
+| Root Directory | `backend/product-service` |
+| Dockerfile detected | `Dockerfile.vercel` |
+
+Environment variables:
+
+```text
+FRONTEND_ORIGIN=<Netlify HTTPS origin>
+```
+
+The container defaults `PORT` to Vercel's standard container port `80`, and a Vercel project setting can override it. Running the service locally with Maven, outside the container, continues to default to port `8080`.
+
+#### Payment Service on Vercel
+
+| Setting | Value |
+|---|---|
+| Root Directory | `backend/payment-service` |
+| Dockerfile detected | `Dockerfile.vercel` |
+
+Environment variables:
+
+```text
+PAYMENT_SIMULATE_FAILURE=false
+```
+
+The container defaults `PORT` to `80`, and a Vercel project setting can override it. Running the service locally with Maven continues to default to port `8082`.
+
+#### Order Service on Vercel
+
+| Setting | Value |
+|---|---|
+| Root Directory | `backend/order-service` |
+| Dockerfile detected | `Dockerfile.vercel` |
+
+Environment variables:
+
+```text
+PRODUCT_SERVICE_URL=<Product Service Vercel HTTPS URL>
+PAYMENT_SERVICE_URL=<Payment Service Vercel HTTPS URL>
+FRONTEND_ORIGIN=<Netlify HTTPS origin>
+```
+
+Use base URLs without a trailing API path, for example `https://your-product-service.example`. The container defaults `PORT` to `80`, and a Vercel project setting can override it. Running the service locally with Maven continues to default to port `8081`.
+
+To build the same images locally from the repository root:
+
+```bash
+docker build -f backend/product-service/Dockerfile.vercel \
+  -t reacspi-product-service:vercel backend/product-service
+
+docker build -f backend/payment-service/Dockerfile.vercel \
+  -t reacspi-payment-service:vercel backend/payment-service
+
+docker build -f backend/order-service/Dockerfile.vercel \
+  -t reacspi-order-service:vercel backend/order-service
+```
+
+#### Important Vercel in-memory limitation
+
+Vercel container deployments run as stateless functions that can scale down and create multiple instances. This project's in-memory catalog stock, orders, and payments are therefore suitable only for an educational demo: state can reset when an instance stops, and separate instances are not guaranteed to share the same data. Durable and consistent production data would require external persistence, which is intentionally outside this project's scope.
+
 ### Manual deployment order
 
-1. Deploy Product Service.
+1. Create a Vercel project with Root Directory `backend/product-service` and deploy Product Service.
 2. Copy its public HTTPS URL.
-3. Deploy Payment Service.
+3. Create a Vercel project with Root Directory `backend/payment-service`, set `PAYMENT_SIMULATE_FAILURE=false`, and deploy Payment Service.
 4. Copy its public HTTPS URL.
-5. Deploy Order Service with `PRODUCT_SERVICE_URL` and `PAYMENT_SERVICE_URL` set to those backend URLs.
+5. Create a Vercel project with Root Directory `backend/order-service`, then deploy it with `PRODUCT_SERVICE_URL` and `PAYMENT_SERVICE_URL` set to those backend URLs.
 6. Copy the Order Service public HTTPS URL.
 7. Deploy `frontend` to Netlify with `VITE_PRODUCT_API_URL` and `VITE_ORDER_API_URL` set to the public backend URLs.
 8. Copy the Netlify HTTPS URL.

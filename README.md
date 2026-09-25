@@ -20,6 +20,8 @@ Browser
 React Frontend :5173
   |
   +--> Product Service :8080
+  |
+  +--> Order Service :8081
 
 Client
   |
@@ -38,7 +40,8 @@ Order Service :8081
 - Supports shareable product search and category filters.
 - Includes dedicated product details routes.
 - Includes a stock-aware shopping cart that persists in the browser.
-- Keeps account, orders, and checkout as intentional placeholders for later steps.
+- Provides a checkout and order-result flow backed by Order Service.
+- Keeps account and order history as intentional placeholders for later steps.
 
 ### Product Service
 
@@ -71,6 +74,7 @@ product-ordering-service/
 │   │   ├── components/
 │   │   ├── constants/
 │   │   ├── context/
+│   │   ├── hooks/
 │   │   ├── pages/
 │   │   ├── services/
 │   │   ├── test/
@@ -115,7 +119,25 @@ http://localhost:5173/cart
 
 Products can be added from catalog cards or product details pages. Adding the same product again increases its quantity, while the header badge shows the total quantity across all cart items. The cart provides quantity controls, item subtotals, a cart subtotal, remove and clear actions, and prevents quantities from exceeding current product stock.
 
-Cart data is stored under the versioned browser `localStorage` key `reacspi-cart-v1`, so it remains after a page refresh. When the cart page opens, it asks Product Service for current prices and stock and explains any item that needs attention. The cart is frontend-only in this step: the checkout button is intentionally disabled, and no orders, payments, or inventory changes occur from cart actions.
+Cart data is stored under the versioned browser `localStorage` key `reacspi-cart-v1`, so it remains after a page refresh. When the cart page opens, it asks Product Service for current prices and stock and explains any item that needs attention. Adding products to the cart alone does not create orders or reduce inventory.
+
+## Frontend Checkout
+
+Checkout is available at:
+
+```text
+http://localhost:5173/checkout
+```
+
+The checkout page reviews the current cart and total. Product availability is checked again immediately before the frontend sends one multi-product request to Order Service. The request contains only product IDs and quantities; the backend remains responsible for current prices, totals, payment, and stock reduction.
+
+After the backend responds, `/order-result` displays the returned order ID, items, total, and status:
+
+- `CONFIRMED`: the cart is cleared and the header badge returns to zero.
+- `PAYMENT_FAILED`: the cart is kept so it can be reviewed.
+- `INVENTORY_UPDATE_FAILED`: the cart is kept, and the page warns against submitting the payment again.
+
+If the browser loses the response to `POST /orders`, the result is ambiguous: the backend may have processed the order even though the browser did not receive confirmation. ReacSpi keeps the cart, does not retry automatically, and warns the user not to submit again until the result can be verified. Order history, which would help resolve that situation, is intentionally deferred to the next step. Payment remains simulated; checkout does not collect card, billing, or shipping information.
 
 ## Order Flow
 
@@ -297,7 +319,7 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173`. The frontend reads the Product Service address from `VITE_PRODUCT_API_URL`. For local development, copy `frontend/.env.example` to `frontend/.env` if you want to override the built-in local default.
+Open `http://localhost:5173`. The frontend reads service addresses from `VITE_PRODUCT_API_URL` and `VITE_ORDER_API_URL`. Their local defaults are `http://localhost:8080` and `http://localhost:8081`. For local development, copy `frontend/.env.example` to `frontend/.env` if you want to override either default. Product Service, Payment Service, and Order Service must all be running to complete checkout.
 
 ### Running all backend services
 
@@ -418,7 +440,7 @@ mvn clean verify
 
 Current test counts:
 
-- React Frontend: 19 tests
+- React Frontend: 36 tests
 - Product Service: 15 tests
 - Order Service: 18 tests
 - Payment Service: 5 tests
@@ -428,6 +450,8 @@ Current test counts:
 - All products, orders, and payments are stored only in memory.
 - Restarting a service resets that service's data and ID counters.
 - Payment processing is simulated and does not contact a real payment provider.
+- The frontend clears its cart only after an order response with status `CONFIRMED`.
+- Order results are passed through router state and are not stored as order history. Refreshing `/order-result` therefore shows a no-result state.
 - Order Service reads the local Product and Payment Service URLs from its `application.properties`.
 - A payment succeeds before stock is reduced. If a later stock update fails, the order is stored as `INVENTORY_UPDATE_FAILED` and the problem is logged rather than reported as confirmed.
 - Stock is updated one item at a time. Without a distributed transaction or compensation workflow, an unexpected later update failure can leave earlier items reduced. This limitation is intentional for this learning project.

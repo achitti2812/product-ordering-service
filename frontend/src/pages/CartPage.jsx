@@ -1,91 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, RefreshCw, ShoppingBag, Trash2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import CartItem from '../components/CartItem.jsx'
 import { useCart } from '../context/CartContext.jsx'
-import { getProductById, ProductNotFoundError } from '../services/productService.js'
+import { useCartReconciliation } from '../hooks/useCartReconciliation.js'
 import { formatCurrency } from '../utils/formatCurrency.js'
 
 function CartPage() {
+  const navigate = useNavigate()
   const {
     cartItems,
     cartItemCount,
     cartSubtotal,
     clearCart,
-    refreshCartProduct,
-    markCartItemUnavailable,
   } = useCart()
-  const [refreshStatus, setRefreshStatus] = useState('idle')
-  const [refreshNotices, setRefreshNotices] = useState({})
-  const [retryVersion, setRetryVersion] = useState(0)
-  const itemIds = useMemo(() => cartItems.map((item) => item.id).join(','), [cartItems])
-
-  useEffect(() => {
-    if (!itemIds) {
-      setRefreshStatus('idle')
-      setRefreshNotices({})
-      return undefined
-    }
-
-    const controller = new AbortController()
-    const itemsToRefresh = cartItems
-
-    async function refreshProducts() {
-      setRefreshStatus('loading')
-      setRefreshNotices({})
-
-      const results = await Promise.all(itemsToRefresh.map(async (item) => {
-        try {
-          const product = await getProductById(item.id, { signal: controller.signal })
-          return { item, product, status: 'success' }
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            return { status: 'aborted' }
-          }
-
-          if (error instanceof ProductNotFoundError) {
-            return { item, status: 'not-found' }
-          }
-
-          return { item, status: 'error' }
-        }
-      }))
-
-      if (controller.signal.aborted) {
-        return
-      }
-
-      const nextNotices = {}
-      let hasRequestError = false
-
-      results.forEach((result) => {
-        if (result.status === 'success') {
-          const { item, product } = result
-
-          if (product.stock === 0) {
-            nextNotices[item.id] = 'Current inventory shows this item is out of stock.'
-          } else if (item.quantity > product.stock) {
-            nextNotices[item.id] = `Quantity adjusted to the current stock of ${product.stock}.`
-          } else if (Number(item.price) !== Number(product.price)) {
-            nextNotices[item.id] = 'Price updated using the latest product information.'
-          }
-
-          refreshCartProduct(product)
-        } else if (result.status === 'not-found') {
-          markCartItemUnavailable(result.item.id)
-          nextNotices[result.item.id] = 'Product Service no longer lists this item.'
-        } else if (result.status === 'error') {
-          hasRequestError = true
-        }
-      })
-
-      setRefreshNotices(nextNotices)
-      setRefreshStatus(hasRequestError ? 'error' : 'success')
-    }
-
-    refreshProducts()
-    return () => controller.abort()
-  }, [itemIds, retryVersion, markCartItemUnavailable, refreshCartProduct])
+  const {
+    status: refreshStatus,
+    notices: refreshNotices,
+    canCheckout,
+    retry,
+  } = useCartReconciliation()
 
   function confirmClearCart() {
     if (window.confirm('Remove all items from your cart?')) {
@@ -136,7 +69,7 @@ function CartPage() {
       {refreshStatus === 'error' && (
         <div className="cart-refresh-message cart-refresh-warning" role="alert">
           <span>We couldn't refresh every item. Stored prices and stock may be out of date.</span>
-          <button type="button" onClick={() => setRetryVersion((value) => value + 1)}>
+          <button type="button" onClick={retry}>
             Retry
           </button>
         </div>
@@ -159,9 +92,14 @@ function CartPage() {
             <span>Subtotal</span>
             <strong>{formatCurrency(cartSubtotal)}</strong>
           </div>
-          <p>Taxes and shipping are not included and will be handled during a future checkout step.</p>
-          <button className="checkout-button" type="button" disabled>
-            Checkout coming in Step 6
+          <p>This demo does not add taxes or shipping fees.</p>
+          <button
+            className="checkout-button"
+            type="button"
+            disabled={!canCheckout}
+            onClick={() => navigate('/checkout')}
+          >
+            {refreshStatus === 'loading' ? 'Checking availability…' : 'Proceed to checkout'}
           </button>
         </aside>
       </div>

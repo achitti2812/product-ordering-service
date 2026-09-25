@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import CatalogState from '../components/CatalogState.jsx'
 import CategorySection from '../components/CategorySection.jsx'
 import Hero from '../components/Hero.jsx'
@@ -42,14 +42,18 @@ function getCatalogTitle(category, search) {
 
 function HomePage() {
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { category, search } = readCatalogFilters(searchParams)
+  const catalogRequestKey = JSON.stringify({ category, search })
   const [allProducts, setAllProducts] = useState([])
   const [catalogProducts, setCatalogProducts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
+  const [loadedCatalogKey, setLoadedCatalogKey] = useState(null)
   const [retryVersion, setRetryVersion] = useState(0)
   const fullCatalog = useRef(null)
+  const scrolledLocationKey = useRef(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -82,13 +86,36 @@ function HomePage() {
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false)
+          setLoadedCatalogKey(catalogRequestKey)
         }
       }
     }
 
     loadProducts()
     return () => controller.abort()
-  }, [category, search, retryVersion])
+  }, [category, search, retryVersion, catalogRequestKey])
+
+  useEffect(() => {
+    const resultsAreReady = loadedCatalogKey === catalogRequestKey
+    const alreadyScrolled = scrolledLocationKey.current === location.key
+
+    if (location.hash !== '#catalog' || !resultsAreReady || alreadyScrolled) {
+      return
+    }
+
+    const catalogHeading = document.querySelector('#catalog .catalog-heading')
+    if (!catalogHeading) {
+      return
+    }
+
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+    catalogHeading.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
+    scrolledLocationKey.current = location.key
+  }, [catalogRequestKey, loadedCatalogKey, location.hash, location.key])
 
   function openCatalog(nextFilters) {
     navigate({

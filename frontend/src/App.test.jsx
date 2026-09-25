@@ -67,6 +67,8 @@ const products = [
   },
 ]
 
+const scrollIntoViewMock = vi.fn()
+
 function matchingProducts({ category = '', search = '' } = {}) {
   const searchTerm = search.toLowerCase()
 
@@ -89,6 +91,15 @@ function renderApp(initialEntry = '/') {
 
 describe('catalog browsing', () => {
   beforeEach(() => {
+    scrollIntoViewMock.mockReset()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    })
     getProducts.mockReset()
     getProductById.mockReset()
     getProducts.mockImplementation((filters) => Promise.resolve(matchingProducts(filters)))
@@ -139,6 +150,56 @@ describe('catalog browsing', () => {
       )
     })
     expect(screen.getByText('1 product found')).toBeInTheDocument()
+  })
+
+  it('scrolls to the rendered collection after category navigation', async () => {
+    const user = userEvent.setup()
+    renderApp('/cart')
+
+    await user.click(screen.getAllByRole('button', { name: 'Fashion' })[0])
+    await screen.findByRole('heading', { name: 'Fashion products' })
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledTimes(1)
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  })
+
+  it('scrolls to the collection when All Products clears the category', async () => {
+    const user = userEvent.setup()
+    renderApp('/?category=Electronics')
+
+    await screen.findByRole('heading', { name: 'Electronics products' })
+    expect(scrollIntoViewMock).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'All Products' }))
+    await screen.findByRole('heading', { name: 'Explore products' })
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('respects reduced-motion preferences when scrolling to search results', async () => {
+    const user = userEvent.setup()
+    window.matchMedia.mockReturnValue({ matches: true })
+    renderApp()
+
+    await screen.findByText('5 products found')
+    await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'laptop')
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { name: 'Search results for “laptop”' })
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledTimes(1)
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+        behavior: 'auto',
+        block: 'start',
+      })
+    })
   })
 
   it('clears category and search filters independently', async () => {

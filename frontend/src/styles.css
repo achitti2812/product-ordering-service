@@ -611,6 +611,7 @@ a.header-action:focus-visible {
 .catalog-heading {
   padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
+  scroll-margin-top: 138px;
 }
 
 .catalog-result-summary {
@@ -2202,6 +2203,7 @@ a.header-action:focus-visible {
   .catalog-heading {
     flex-direction: row;
     align-items: end;
+    scroll-margin-top: 174px;
   }
 
   .footer-inner {

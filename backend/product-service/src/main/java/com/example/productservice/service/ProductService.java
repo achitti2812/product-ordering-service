@@ -13,7 +13,7 @@ import java.util.Optional;
 public class ProductService {
 
     private final List<Product> products = List.of(
-            product(1L, "Laptop", "Powerful laptop for work, study, and everyday use.", "Electronics", 999.99, 10, "photo-1779896412071-bf3160aad19e"),
+            product(1L, "Laptop", "Powerful laptop for work, study, and everyday use.", "Electronics", 999.99, 10, "photo-1517336714731-489689fd1ca8"),
             product(2L, "Headphones", "Wireless noise-isolating headphones with clear sound.", "Electronics", 79.99, 25, "photo-1505740420928-5e560c06d30e"),
             product(3L, "Keyboard", "Responsive mechanical keyboard for comfortable typing.", "Electronics", 49.99, 40, "photo-1618384887929-16ec33fab9ef"),
             product(4L, "Smartphone", "Modern smartphone with a bright display and capable camera.", "Electronics", 699.99, 18, "photo-1592890288564-76628a30a657"),
@@ -61,7 +61,7 @@ public class ProductService {
             product(42L, "Basketball", "Indoor and outdoor basketball with a dependable grip.", "Sports", 29.99, 40, "photo-1546519638-68e109498ffc"),
             product(43L, "Cricket Bat", "Balanced wooden cricket bat for practice and recreation.", "Sports", 69.99, 20, "photo-1593341646782-e0b495cff86d"),
             product(44L, "Badminton Racket", "Lightweight badminton racket for quick, controlled swings.", "Sports", 44.99, 25, "photo-1708312604109-16c0be9326cd"),
-            product(45L, "Tennis Racket", "Comfortable tennis racket suitable for beginner players.", "Sports", 59.99, 22, "photo-1545151414-8a948e1ea54f"),
+            product(45L, "Tennis Racket", "Comfortable tennis racket suitable for beginner players.", "Sports", 59.99, 22, "photo-1622279457486-62dcc4a431d6"),
             product(46L, "Yoga Mat", "Non-slip cushioned yoga mat for exercise and stretching.", "Sports", 35.99, 38, "photo-1552196563-55cd4e45efb3"),
             product(47L, "Dumbbell Set", "Adjustable dumbbell set for strength training at home.", "Sports", 89.99, 18, "photo-1638536532686-d610adfc8e5c"),
             product(48L, "Running Bottle", "Lightweight sports bottle designed for running and workouts.", "Sports", 19.99, 50, "photo-1600679472233-eabc13b79f07"),
